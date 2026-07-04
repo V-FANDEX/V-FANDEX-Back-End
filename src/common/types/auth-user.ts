@@ -1,0 +1,8 @@
+import { Role } from "@prisma/client";
+
+export interface AuthUser {
+  id: string;
+  email: string | null;
+  nickname: string;
+  role: Role;
+}

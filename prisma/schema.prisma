@@ -1,0 +1,342 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  USER
+  ADMIN
+  AI
+}
+
+enum TradeType {
+  BUY
+  SELL
+}
+
+enum OrderType {
+  MARKET
+  LIMIT
+  CONDITION
+}
+
+enum ConditionType {
+  PRICE_LESS_THAN_OR_EQUAL
+  PRICE_GREATER_THAN_OR_EQUAL
+}
+
+enum ConditionalOrderStatus {
+  ACTIVE
+  TRIGGERED
+  CANCELLED
+  FAILED
+}
+
+enum SeasonStatus {
+  ACTIVE
+  ENDED
+  UPCOMING
+}
+
+enum ScenarioType {
+  MAIN
+  BIG
+  SMALL
+}
+
+enum ScenarioSentiment {
+  POSITIVE
+  NEGATIVE
+  MIXED
+  NEUTRAL
+}
+
+enum ScenarioCreatedBy {
+  ADMIN
+  SYSTEM
+  AI
+}
+
+enum AiStrategyType {
+  AGGRESSIVE
+  STABLE
+  RANDOM
+  MARKET_FOCUSED
+}
+
+model User {
+  id                  String             @id @default(cuid())
+  email               String?            @unique
+  passwordHash        String?
+  nickname            String             @unique
+  role                Role               @default(USER)
+  cash                Decimal            @default(0) @db.Decimal(20, 4)
+  initialCash         Decimal            @default(0) @db.Decimal(20, 4)
+  totalAssetValue     Decimal            @default(0) @db.Decimal(20, 4)
+  isActive            Boolean            @default(true)
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+  aiAccount           AiAccount?
+  conditionalOrders   ConditionalOrder[]
+  dividends           Dividend[]
+  holdings            Holding[]
+  rankings            Ranking[]
+  trades              Trade[]
+  watchlistItems      Watchlist[]
+
+  @@index([role])
+  @@index([isActive])
+}
+
+model Market {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  description String?
+  iconUrl     String?
+  sortOrder   Int      @default(0)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  stocks      Stock[]
+
+  @@index([isActive, sortOrder])
+}
+
+model Stock {
+  id                  String             @id @default(cuid())
+  marketId            String
+  name                String
+  description         String?
+  imageUrl            String?
+  tags                String[]           @default([])
+  currentPrice        Decimal            @db.Decimal(20, 4)
+  previousPrice       Decimal            @db.Decimal(20, 4)
+  initialPrice        Decimal            @db.Decimal(20, 4)
+  totalSupply         Int
+  circulatingSupply   Int
+  volatilityLevel     Int                @default(5)
+  dividendEnabled     Boolean            @default(false)
+  baseDividendRate    Decimal            @default(0) @db.Decimal(10, 6)
+  isListed            Boolean            @default(true)
+  isTradingSuspended  Boolean            @default(false)
+  delistedAt          DateTime?
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+  conditionalOrders   ConditionalOrder[]
+  dividends           Dividend[]
+  holdings            Holding[]
+  market              Market             @relation(fields: [marketId], references: [id], onDelete: Restrict)
+  priceHistories      PriceHistory[]
+  scenarioImpacts     ScenarioImpact[]
+  trades              Trade[]
+  watchlistItems      Watchlist[]
+
+  @@unique([marketId, name])
+  @@index([marketId, isListed])
+  @@index([currentPrice])
+}
+
+model Holding {
+  id               String   @id @default(cuid())
+  userId           String
+  stockId          String
+  quantity         Int
+  averageBuyPrice  Decimal  @db.Decimal(20, 4)
+  realizedProfit   Decimal  @default(0) @db.Decimal(20, 4)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  stock            Stock    @relation(fields: [stockId], references: [id], onDelete: Cascade)
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, stockId])
+  @@index([stockId])
+}
+
+model Trade {
+  id          String    @id @default(cuid())
+  userId      String
+  stockId     String
+  seasonId    String?
+  type        TradeType
+  orderType   OrderType @default(MARKET)
+  price       Decimal   @db.Decimal(20, 4)
+  quantity    Int
+  totalAmount Decimal   @db.Decimal(20, 4)
+  fee         Decimal   @default(0) @db.Decimal(20, 4)
+  createdAt   DateTime  @default(now())
+  season      Season?   @relation(fields: [seasonId], references: [id], onDelete: SetNull)
+  stock       Stock     @relation(fields: [stockId], references: [id], onDelete: Restrict)
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([stockId, createdAt])
+  @@index([seasonId])
+}
+
+model ConditionalOrder {
+  id             String                 @id @default(cuid())
+  userId         String
+  stockId        String
+  type           TradeType
+  triggerPrice   Decimal                @db.Decimal(20, 4)
+  conditionType  ConditionType
+  quantity       Int
+  status         ConditionalOrderStatus @default(ACTIVE)
+  failureReason  String?
+  createdAt      DateTime               @default(now())
+  updatedAt      DateTime               @updatedAt
+  triggeredAt    DateTime?
+  stock          Stock                  @relation(fields: [stockId], references: [id], onDelete: Cascade)
+  user           User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([status, stockId])
+  @@index([userId, status])
+}
+
+model Dividend {
+  id           String   @id @default(cuid())
+  userId       String
+  stockId      String?
+  seasonId     String?
+  amount       Decimal  @db.Decimal(20, 4)
+  dividendRate Decimal  @db.Decimal(10, 6)
+  claimCount   Int
+  createdAt    DateTime @default(now())
+  season       Season?  @relation(fields: [seasonId], references: [id], onDelete: SetNull)
+  stock        Stock?   @relation(fields: [stockId], references: [id], onDelete: SetNull)
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, stockId, createdAt])
+  @@index([seasonId])
+}
+
+model DividendSetting {
+  id                    String   @id @default("default")
+  baseDividendRate      Decimal  @default(0.01) @db.Decimal(10, 6)
+  claimCountMultiplier  Decimal  @default(0.1) @db.Decimal(10, 6)
+  claimCooldownMinutes  Int      @default(1440)
+  seasonalClaimLimit    Int      @default(30)
+  updatedAt             DateTime @updatedAt
+}
+
+model Watchlist {
+  id        String   @id @default(cuid())
+  userId    String
+  stockId   String
+  createdAt DateTime @default(now())
+  stock     Stock    @relation(fields: [stockId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, stockId])
+  @@index([stockId])
+}
+
+model Season {
+  id          String       @id @default(cuid())
+  name        String
+  startsAt    DateTime
+  endsAt      DateTime
+  initialCash Decimal      @db.Decimal(20, 4)
+  status      SeasonStatus @default(UPCOMING)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  dividends   Dividend[]
+  rankings    Ranking[]
+  trades      Trade[]
+
+  @@index([status, startsAt, endsAt])
+}
+
+model Ranking {
+  id                    String   @id @default(cuid())
+  seasonId              String
+  userId                String
+  totalAssetValue       Decimal  @db.Decimal(20, 4)
+  cash                  Decimal  @db.Decimal(20, 4)
+  profitRate            Decimal  @db.Decimal(12, 6)
+  realizedProfit        Decimal  @db.Decimal(20, 4)
+  totalDividendReceived Decimal  @db.Decimal(20, 4)
+  tradeVolume           Decimal  @db.Decimal(20, 4)
+  rank                  Int      @default(0)
+  updatedAt             DateTime @updatedAt
+  season                Season   @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+  user                  User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([seasonId, userId])
+  @@index([seasonId, rank])
+}
+
+model Scenario {
+  id                String              @id @default(cuid())
+  type              ScenarioType
+  title             String
+  content           String
+  affectedMarketIds String[]            @default([])
+  affectedStockIds  String[]            @default([])
+  sentiment         ScenarioSentiment
+  impactLevel       Int
+  createdBy         ScenarioCreatedBy   @default(ADMIN)
+  rawAiResponse     Json?
+  createdAt         DateTime            @default(now())
+  appliedAt         DateTime?
+  impacts           ScenarioImpact[]
+
+  @@index([type, createdAt])
+  @@index([appliedAt])
+}
+
+model ScenarioImpact {
+  id            String   @id @default(cuid())
+  scenarioId    String
+  stockId       String
+  oldPrice      Decimal  @db.Decimal(20, 4)
+  newPrice      Decimal  @db.Decimal(20, 4)
+  changeRate    Decimal  @db.Decimal(10, 6)
+  impactReason  String?
+  createdAt     DateTime @default(now())
+  scenario      Scenario @relation(fields: [scenarioId], references: [id], onDelete: Cascade)
+  stock         Stock    @relation(fields: [stockId], references: [id], onDelete: Cascade)
+
+  @@index([scenarioId])
+  @@index([stockId, createdAt])
+}
+
+model PriceHistory {
+  id          String   @id @default(cuid())
+  stockId     String
+  price       Decimal  @db.Decimal(20, 4)
+  changeRate  Decimal  @db.Decimal(10, 6)
+  reason      String?
+  createdAt   DateTime @default(now())
+  stock       Stock    @relation(fields: [stockId], references: [id], onDelete: Cascade)
+
+  @@index([stockId, createdAt])
+}
+
+model AiAccount {
+  id                 String         @id @default(cuid())
+  userId             String         @unique
+  strategyType       AiStrategyType @default(RANDOM)
+  preferredMarketIds String[]       @default([])
+  riskLevel          Int            @default(5)
+  isActive           Boolean        @default(true)
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @updatedAt
+  user               User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([strategyType, isActive])
+}
+
+model AdminAuditLog {
+  id        String   @id @default(cuid())
+  adminId   String?
+  action    String
+  metadata  Json?
+  createdAt DateTime @default(now())
+
+  @@index([adminId, createdAt])
+}
