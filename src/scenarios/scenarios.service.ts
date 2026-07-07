@@ -10,6 +10,7 @@ import {
 import OpenAI from "openai";
 import { zodTextFormat } from "openai/helpers/zod";
 import { z } from "zod";
+import { AiAccountsService } from "../ai-accounts/ai-accounts.service";
 import { money, rate } from "../common/utils/decimal";
 import { ConditionalOrdersService } from "../conditional-orders/conditional-orders.service";
 import { PrismaService } from "../prisma/prisma.service";
@@ -30,6 +31,7 @@ type ScenarioAiOutput = z.infer<typeof ScenarioAiOutput>;
 @Injectable()
 export class ScenariosService {
   constructor(
+    private readonly aiAccountsService: AiAccountsService,
     private readonly config: ConfigService,
     private readonly conditionalOrdersService: ConditionalOrdersService,
     private readonly prisma: PrismaService,
@@ -171,8 +173,10 @@ export class ScenariosService {
       });
     });
 
+    const aiTradeSummary = await this.aiAccountsService.runScenarioTrades(scenario.id);
     await this.rankingsService.recalculateAll();
-    return this.get(id);
+    const appliedScenario = await this.get(id);
+    return { ...appliedScenario, aiTradeSummary };
   }
 
   private async buildScenarioContext(dto: GenerateScenarioDto) {

@@ -5,6 +5,7 @@
   "description": "V-FANDEX backend API for fandom/content virtual stock simulation.",
   "license": "UNLICENSED",
   "scripts": {
+    "prebuild": "node -e \"require('fs').rmSync('dist', { recursive: true, force: true })\"",
     "build": "nest build",
     "start": "nest start",
     "start:dev": "nest start --watch",

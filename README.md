@@ -58,10 +58,26 @@ ADMIN_PASSWORD=ChangeMe123!
 ```bash
 npm run typecheck
 npm run build
+npm run start:prod
 npm run prisma:generate
 npm run prisma:migrate
 npm run prisma:studio
 ```
+
+## AI Account Behavior
+
+AI accounts are simulated traders, not login users. They are created by admins with `role=AI`, no password, and their trades always go through the same buy/sell service used by normal users.
+
+AI accounts consider listed stocks across every market. `preferredMarketIds` can remain as profile metadata, but it does not restrict the trade universe.
+
+When an admin applies a GPT-generated scenario, the server first updates impacted stock prices and writes `ScenarioImpact` records. After that, active AI accounts automatically react once:
+
+- `POSITIVE`: buy an impacted stock with a positive price signal.
+- `NEGATIVE`: sell held stocks affected by the issue.
+- `MIXED`: choose between selling negatively affected holdings and buying positively affected stocks.
+- `NEUTRAL`: usually skip, with a small chance to make a light reaction trade.
+
+The AI decision uses the scenario sentiment, impact level, actual stock change rate, strategy type, risk level, cash, and current holdings. It does not call GPT again, so scenario reaction trades do not add OpenAI cost.
 
 ## Notes
 
