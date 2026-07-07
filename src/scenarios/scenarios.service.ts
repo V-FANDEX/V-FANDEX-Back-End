@@ -1,4 +1,14 @@
-import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
+import {
+  BadGatewayException,
+  BadRequestException,
+  GatewayTimeoutException,
+  HttpException,
+  HttpStatus,
+  Injectable,
+  NotFoundException,
+  ServiceUnavailableException,
+  UnauthorizedException
+} from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import {
   Prisma,
@@ -16,6 +26,7 @@ import { ConditionalOrdersService } from "../conditional-orders/conditional-orde
 import { PrismaService } from "../prisma/prisma.service";
 import { RankingsService } from "../rankings/rankings.service";
 import { GenerateScenarioDto } from "./dto/generate-scenario.dto";
+import { TestOpenAiScenarioDto } from "./dto/test-openai-scenario.dto";
 
 const ScenarioAiOutput = z.object({
   title: z.string().min(1).max(120),
@@ -58,45 +69,42 @@ export class ScenariosService {
     return scenario;
   }
 
-  async generate(type: ScenarioType, dto: GenerateScenarioDto) {
-    const apiKey = this.config.get<string>("OPENAI_API_KEY");
-    if (!apiKey) {
-      throw new BadRequestException("OPENAI_API_KEY is not configured.");
-    }
-
-    const model = this.modelFor(type);
-    const client = new OpenAI({ apiKey });
-    const context = await this.buildScenarioContext(dto);
-    const response = await client.responses.parse({
-      model,
-      input: [
-        {
-          role: "system",
-          content:
-            "You create Korean virtual stock market scenarios for fandom and entertainment content. Return only the requested structured scenario. Do not calculate exact price changes."
-        },
-        {
-          role: "user",
-          content: JSON.stringify({
-            scenarioType: type,
-            instruction:
-              "Generate a market scenario with narrative text, affected market/stock ids, sentiment, and impact level from 1 to 10. Do not include numeric price change values.",
-            prompt: dto.prompt ?? null,
-            candidates: context
-          })
-        }
-      ],
-      text: {
-        format: zodTextFormat(ScenarioAiOutput, "v_fandex_scenario")
+  getOpenAiStatus() {
+    return {
+      configured: Boolean(this.openAiApiKey()),
+      models: {
+        main: this.modelFor(ScenarioType.MAIN),
+        big: this.modelFor(ScenarioType.BIG),
+        small: this.modelFor(ScenarioType.SMALL)
+      },
+      scenarioGeneration: {
+        endpoint: "POST /admin/scenarios/test-openai",
+        persistsScenario: false
       }
-    });
+    };
+  }
 
-    const parsed = response.output_parsed;
-    if (!parsed) {
-      throw new BadRequestException("OpenAI did not return a parseable scenario.");
-    }
+  async testOpenAi(dto: TestOpenAiScenarioDto) {
+    const type = dto.type ?? ScenarioType.SMALL;
+    const prompt =
+      dto.prompt ??
+      "V-FANDEX GPT 연동 확인용 짧은 테스트 시나리오를 생성해줘. 실제 가격 변동 수치는 쓰지 마.";
+    const output = await this.requestScenarioFromOpenAi(type, { ...dto, prompt });
+    const normalized = this.normalizeAiOutput(output.parsed, dto);
 
-    const normalized = this.normalizeAiOutput(parsed, dto);
+    return {
+      ok: true,
+      type,
+      model: output.model,
+      scenario: normalized,
+      persisted: false,
+      rawAiResponseId: output.responseId
+    };
+  }
+
+  async generate(type: ScenarioType, dto: GenerateScenarioDto) {
+    const output = await this.requestScenarioFromOpenAi(type, dto);
+    const normalized = this.normalizeAiOutput(output.parsed, dto);
     return this.prisma.scenario.create({
       data: {
         type,
@@ -108,7 +116,8 @@ export class ScenariosService {
         impactLevel: normalized.impactLevel,
         createdBy: ScenarioCreatedBy.ADMIN,
         rawAiResponse: {
-          model,
+          model: output.model,
+          responseId: output.responseId,
           output: normalized
         }
       }
@@ -197,6 +206,97 @@ export class ScenariosService {
     ]);
 
     return { markets, stocks };
+  }
+
+  private async requestScenarioFromOpenAi(type: ScenarioType, dto: GenerateScenarioDto) {
+    const apiKey = this.openAiApiKey();
+    if (!apiKey) {
+      throw new BadRequestException("OPENAI_API_KEY is not configured.");
+    }
+
+    const model = this.modelFor(type);
+    const client = new OpenAI({
+      apiKey,
+      timeout: Number(this.config.get<string>("OPENAI_TIMEOUT_MS") ?? 30_000),
+      maxRetries: Number(this.config.get<string>("OPENAI_MAX_RETRIES") ?? 1)
+    });
+    const context = await this.buildScenarioContext(dto);
+
+    try {
+      const response = await client.responses.parse({
+        model,
+        input: [
+          {
+            role: "system",
+            content:
+              "You create Korean virtual stock market scenarios for fandom and entertainment content. Return only the requested structured scenario. Do not calculate exact price changes."
+          },
+          {
+            role: "user",
+            content: JSON.stringify({
+              scenarioType: type,
+              instruction:
+                "Generate a market scenario with narrative text, affected market/stock ids, sentiment, and impact level from 1 to 10. Do not include numeric price change values.",
+              prompt: dto.prompt ?? null,
+              candidates: context
+            })
+          }
+        ],
+        text: {
+          format: zodTextFormat(ScenarioAiOutput, "v_fandex_scenario")
+        }
+      });
+
+      const parsed = response.output_parsed;
+      if (!parsed) {
+        throw new BadGatewayException("OpenAI did not return a parseable scenario.");
+      }
+
+      return {
+        model,
+        responseId: response.id,
+        parsed
+      };
+    } catch (error) {
+      this.handleOpenAiError(error);
+    }
+  }
+
+  private openAiApiKey() {
+    const apiKey = this.config.get<string>("OPENAI_API_KEY")?.trim();
+    return apiKey || null;
+  }
+
+  private handleOpenAiError(error: unknown): never {
+    if (error instanceof HttpException) {
+      throw error;
+    }
+
+    if (error instanceof OpenAI.AuthenticationError || error instanceof OpenAI.PermissionDeniedError) {
+      throw new UnauthorizedException("OpenAI API key is invalid or does not have access to the selected model.");
+    }
+
+    if (error instanceof OpenAI.RateLimitError) {
+      throw new HttpException("OpenAI rate limit or credit limit was reached.", HttpStatus.TOO_MANY_REQUESTS);
+    }
+
+    if (error instanceof OpenAI.APIConnectionTimeoutError) {
+      throw new GatewayTimeoutException("OpenAI request timed out.");
+    }
+
+    if (error instanceof OpenAI.APIConnectionError) {
+      throw new ServiceUnavailableException("Could not connect to OpenAI.");
+    }
+
+    if (error instanceof OpenAI.BadRequestError || error instanceof OpenAI.NotFoundError) {
+      throw new BadGatewayException(error.message);
+    }
+
+    if (error instanceof OpenAI.APIError) {
+      throw new BadGatewayException(error.message);
+    }
+
+    throw new BadGatewayException("OpenAI scenario generation failed.");
   }
 
   private normalizeAiOutput(parsed: ScenarioAiOutput, dto: GenerateScenarioDto) {

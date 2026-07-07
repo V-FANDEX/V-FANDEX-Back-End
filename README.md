@@ -79,6 +79,25 @@ When an admin applies a GPT-generated scenario, the server first updates impacte
 
 The AI decision uses the scenario sentiment, impact level, actual stock change rate, strategy type, risk level, cash, and current holdings. It does not call GPT again, so scenario reaction trades do not add OpenAI cost.
 
+## OpenAI Scenario Test
+
+Set `OPENAI_API_KEY` in `.env` or in your deployment environment. Do not put a real key in `.env.example`.
+
+Admins can verify the OpenAI configuration without saving a scenario:
+
+```bash
+GET /admin/scenarios/openai-status
+POST /admin/scenarios/test-openai
+```
+
+`test-openai` performs a real OpenAI call and returns the parsed scenario with `persisted: false`. The normal generation endpoints save the generated scenario:
+
+```bash
+POST /admin/scenarios/generate-main
+POST /admin/scenarios/generate-big
+POST /admin/scenarios/generate-small
+```
+
 ## Notes
 
 - AI accounts have no password and cannot log in through `/auth/login`.

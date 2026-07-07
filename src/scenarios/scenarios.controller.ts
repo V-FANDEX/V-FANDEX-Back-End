@@ -4,6 +4,7 @@ import { Roles } from "../common/decorators/roles.decorator";
 import { JwtAuthGuard } from "../common/guards/jwt-auth.guard";
 import { RolesGuard } from "../common/guards/roles.guard";
 import { GenerateScenarioDto } from "./dto/generate-scenario.dto";
+import { TestOpenAiScenarioDto } from "./dto/test-openai-scenario.dto";
 import { ScenariosService } from "./scenarios.service";
 
 @Controller()
@@ -18,6 +19,20 @@ export class ScenariosController {
   @Get("scenarios/:id")
   get(@Param("id") id: string) {
     return this.scenariosService.get(id);
+  }
+
+  @Get("admin/scenarios/openai-status")
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  openAiStatus() {
+    return this.scenariosService.getOpenAiStatus();
+  }
+
+  @Post("admin/scenarios/test-openai")
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  testOpenAi(@Body() dto: TestOpenAiScenarioDto) {
+    return this.scenariosService.testOpenAi(dto);
   }
 
   @Post("admin/scenarios/generate-main")
