@@ -80,7 +80,7 @@ export class AiAccountsService {
         include: { aiAccount: true }
       });
     } catch {
-      throw new BadRequestException("AI nickname is already in use.");
+      throw new BadRequestException("Failed to create AI account.");
     }
   }
 

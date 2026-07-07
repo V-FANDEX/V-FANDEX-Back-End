@@ -94,7 +94,7 @@ export class AdminService {
       return updated;
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
-        throw new BadRequestException("Email or nickname is already in use.");
+        throw new BadRequestException("Email is already in use.");
       }
       throw error;
     }

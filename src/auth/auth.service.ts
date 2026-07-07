@@ -1,7 +1,7 @@
-import { BadRequestException, Injectable, UnauthorizedException } from "@nestjs/common";
+import { BadRequestException, ConflictException, Injectable, UnauthorizedException } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { JwtService } from "@nestjs/jwt";
-import { Role } from "@prisma/client";
+import { Prisma, Role } from "@prisma/client";
 import * as bcrypt from "bcryptjs";
 import { PrismaService } from "../prisma/prisma.service";
 import { LoginDto } from "./dto/login.dto";
@@ -17,12 +17,22 @@ export class AuthService {
 
   async register(dto: RegisterDto) {
     const initialCash = this.config.get<string>("DEFAULT_INITIAL_CASH") ?? "1000000";
+    const email = dto.email.toLowerCase();
+    const existingUser = await this.prisma.user.findUnique({
+      where: { email },
+      select: { id: true }
+    });
+
+    if (existingUser) {
+      throw new ConflictException("Email is already in use.");
+    }
+
     const passwordHash = await bcrypt.hash(dto.password, 12);
 
     try {
       const user = await this.prisma.user.create({
         data: {
-          email: dto.email.toLowerCase(),
+          email,
           passwordHash,
           nickname: dto.nickname,
           role: Role.USER,
@@ -34,8 +44,12 @@ export class AuthService {
       });
 
       return this.withToken(user);
-    } catch {
-      throw new BadRequestException("Email or nickname is already in use.");
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+        throw new ConflictException("Email is already in use.");
+      }
+
+      throw new BadRequestException("Failed to create user.");
     }
   }
 
