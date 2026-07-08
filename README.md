@@ -64,19 +64,6 @@ npm run prisma:migrate
 npm run prisma:studio
 ```
 
-## Oracle Cloud VM Deployment
-
-The production compose file runs PostgreSQL and the Nest API on the same VM. Keep the real `.env` file only on the server.
-
-```bash
-cp .env.example .env
-# edit .env, especially POSTGRES_PASSWORD, JWT_SECRET, OPENAI_API_KEY, and admin credentials
-docker compose -f docker-compose.prod.yml up -d --build
-docker compose -f docker-compose.prod.yml logs -f api
-```
-
-The API listens on `APP_PORT` from `.env`, defaulting to `3000`.
-
 ## AI Account Behavior
 
 AI accounts are simulated traders, not login users. They are created by admins with `role=AI`, no password, and their trades always go through the same buy/sell service used by normal users.
