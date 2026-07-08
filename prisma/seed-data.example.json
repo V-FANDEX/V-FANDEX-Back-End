@@ -1,0 +1,192 @@
+{
+  "markets": [
+    {
+      "name": "버츄얼&스트리머장",
+      "description": "버츄얼 크리에이터와 스트리머 기반 데모 시장",
+      "iconUrl": "https://api.dicebear.com/9.x/shapes/svg?seed=virtual-market",
+      "sortOrder": 0,
+      "stocks": [
+        {
+          "name": "루미아 라이브",
+          "description": "밝은 콘셉트의 버츄얼 라이브 팀",
+          "imageUrl": "https://api.dicebear.com/9.x/shapes/svg?seed=lumia-live",
+          "tags": ["virtual", "live", "streamer"],
+          "currentPrice": 14200,
+          "previousPrice": 13800,
+          "totalSupply": 120000,
+          "circulatingSupply": 82000,
+          "volatilityLevel": 7,
+          "dividendEnabled": true,
+          "baseDividendRate": 0.012
+        },
+        {
+          "name": "네온하트 스튜디오",
+          "description": "음악 방송과 게임 방송 중심의 크리에이터 그룹",
+          "imageUrl": "https://api.dicebear.com/9.x/shapes/svg?seed=neon-heart",
+          "tags": ["streamer", "music", "game"],
+          "currentPrice": 9800,
+          "previousPrice": 10100,
+          "totalSupply": 100000,
+          "circulatingSupply": 76000,
+          "volatilityLevel": 6,
+          "dividendEnabled": false,
+          "baseDividendRate": 0
+        },
+        {
+          "name": "오로라 채널",
+          "description": "팬 소통 이벤트가 강한 버츄얼 채널",
+          "imageUrl": "https://api.dicebear.com/9.x/shapes/svg?seed=aurora-channel",
+          "tags": ["virtual", "event", "community"],
+          "currentPrice": 7600,
+          "previousPrice": 7400,
+          "totalSupply": 90000,
+          "circulatingSupply": 65000,
+          "volatilityLevel": 5,
+          "dividendEnabled": true,
+          "baseDividendRate": 0.01
+        }
+      ]
+    },
+    {
+      "name": "가수장",
+      "description": "아티스트와 음악 콘텐츠 기반 데모 시장",
+      "iconUrl": "https://api.dicebear.com/9.x/shapes/svg?seed=singer-market",
+      "sortOrder": 1,
+      "stocks": [
+        {
+          "name": "블루문 보컬",
+          "description": "감성 발라드와 OST로 알려진 솔로 아티스트",
+          "imageUrl": "https://api.dicebear.com/9.x/shapes/svg?seed=blue-moon-vocal",
+          "tags": ["singer", "ost", "ballad"],
+          "currentPrice": 18500,
+          "previousPrice": 18100,
+          "totalSupply": 150000,
+          "circulatingSupply": 93000,
+          "volatilityLevel": 4,
+          "dividendEnabled": true,
+          "baseDividendRate": 0.009
+        },
+        {
+          "name": "스파클 유닛",
+          "description": "댄스 퍼포먼스 중심의 프로젝트 유닛",
+          "imageUrl": "https://api.dicebear.com/9.x/shapes/svg?seed=sparkle-unit",
+          "tags": ["idol", "dance", "unit"],
+          "currentPrice": 12300,
+          "previousPrice": 12900,
+          "totalSupply": 130000,
+          "circulatingSupply": 88000,
+          "volatilityLevel": 8,
+          "dividendEnabled": false,
+          "baseDividendRate": 0
+        },
+        {
+          "name": "하모닉 레코즈",
+          "description": "라이브 앨범과 팬미팅을 중심으로 성장하는 팀",
+          "imageUrl": "https://api.dicebear.com/9.x/shapes/svg?seed=harmonic-records",
+          "tags": ["band", "live", "album"],
+          "currentPrice": 11200,
+          "previousPrice": 11000,
+          "totalSupply": 110000,
+          "circulatingSupply": 70000,
+          "volatilityLevel": 5,
+          "dividendEnabled": true,
+          "baseDividendRate": 0.008
+        }
+      ]
+    },
+    {
+      "name": "캐릭터장",
+      "description": "오리지널 캐릭터와 IP 기반 데모 시장",
+      "iconUrl": "https://api.dicebear.com/9.x/shapes/svg?seed=character-market",
+      "sortOrder": 2,
+      "stocks": [
+        {
+          "name": "모찌냥",
+          "description": "굿즈와 숏폼 콘텐츠 반응이 좋은 마스코트 캐릭터",
+          "imageUrl": "https://api.dicebear.com/9.x/shapes/svg?seed=mochi-nyang",
+          "tags": ["character", "goods", "shorts"],
+          "currentPrice": 6400,
+          "previousPrice": 6100,
+          "totalSupply": 200000,
+          "circulatingSupply": 140000,
+          "volatilityLevel": 6,
+          "dividendEnabled": true,
+          "baseDividendRate": 0.011
+        },
+        {
+          "name": "별토끼 라인",
+          "description": "팬아트와 콜라보 확장성이 높은 캐릭터 라인",
+          "imageUrl": "https://api.dicebear.com/9.x/shapes/svg?seed=star-rabbit",
+          "tags": ["character", "collab", "fanart"],
+          "currentPrice": 8700,
+          "previousPrice": 8500,
+          "totalSupply": 180000,
+          "circulatingSupply": 125000,
+          "volatilityLevel": 5,
+          "dividendEnabled": false,
+          "baseDividendRate": 0
+        },
+        {
+          "name": "코스모 펭귄",
+          "description": "우주 탐험 콘셉트의 스토리형 캐릭터",
+          "imageUrl": "https://api.dicebear.com/9.x/shapes/svg?seed=cosmo-penguin",
+          "tags": ["character", "story", "space"],
+          "currentPrice": 7200,
+          "previousPrice": 7350,
+          "totalSupply": 160000,
+          "circulatingSupply": 102000,
+          "volatilityLevel": 4,
+          "dividendEnabled": true,
+          "baseDividendRate": 0.007
+        }
+      ]
+    },
+    {
+      "name": "애니메이션장",
+      "description": "애니메이션 작품과 시즌 콘텐츠 기반 데모 시장",
+      "iconUrl": "https://api.dicebear.com/9.x/shapes/svg?seed=animation-market",
+      "sortOrder": 3,
+      "stocks": [
+        {
+          "name": "은하철도 시즌즈",
+          "description": "신규 시즌 공개를 앞둔 SF 애니메이션",
+          "imageUrl": "https://api.dicebear.com/9.x/shapes/svg?seed=galaxy-seasons",
+          "tags": ["anime", "sf", "season"],
+          "currentPrice": 15600,
+          "previousPrice": 14900,
+          "totalSupply": 170000,
+          "circulatingSupply": 114000,
+          "volatilityLevel": 7,
+          "dividendEnabled": true,
+          "baseDividendRate": 0.01
+        },
+        {
+          "name": "마법서점 프로젝트",
+          "description": "일상 판타지 장르의 오리지널 애니메이션",
+          "imageUrl": "https://api.dicebear.com/9.x/shapes/svg?seed=magic-bookstore",
+          "tags": ["anime", "fantasy", "original"],
+          "currentPrice": 9300,
+          "previousPrice": 9100,
+          "totalSupply": 140000,
+          "circulatingSupply": 91000,
+          "volatilityLevel": 5,
+          "dividendEnabled": false,
+          "baseDividendRate": 0
+        },
+        {
+          "name": "제로포인트 극장판",
+          "description": "극장판 개봉 이벤트를 앞둔 액션 애니메이션",
+          "imageUrl": "https://api.dicebear.com/9.x/shapes/svg?seed=zero-point-movie",
+          "tags": ["anime", "movie", "action"],
+          "currentPrice": 13400,
+          "previousPrice": 13650,
+          "totalSupply": 155000,
+          "circulatingSupply": 99000,
+          "volatilityLevel": 8,
+          "dividendEnabled": true,
+          "baseDividendRate": 0.009
+        }
+      ]
+    }
+  ]
+}

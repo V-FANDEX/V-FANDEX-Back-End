@@ -1,7 +1,38 @@
-import { PrismaClient, Role, SeasonStatus } from "@prisma/client";
+import { existsSync, readFileSync } from "node:fs";
+import { join } from "node:path";
+import { Prisma, PrismaClient, Role, SeasonStatus } from "@prisma/client";
 import * as bcrypt from "bcryptjs";
 
 const prisma = new PrismaClient();
+
+interface SeedStock {
+  name: string;
+  description?: string;
+  imageUrl?: string;
+  tags?: string[];
+  currentPrice: number;
+  previousPrice?: number;
+  initialPrice?: number;
+  totalSupply: number;
+  circulatingSupply?: number;
+  volatilityLevel?: number;
+  dividendEnabled?: boolean;
+  baseDividendRate?: number;
+  isListed?: boolean;
+}
+
+interface SeedMarket {
+  name: string;
+  description?: string;
+  iconUrl?: string;
+  sortOrder?: number;
+  isActive?: boolean;
+  stocks?: SeedStock[];
+}
+
+interface SeedData {
+  markets: SeedMarket[];
+}
 
 async function main() {
   const initialCash = process.env.DEFAULT_INITIAL_CASH ?? "1000000";
@@ -34,24 +65,7 @@ async function main() {
     update: {}
   });
 
-  const markets = [
-    "버츄얼&스트리머장",
-    "가수장",
-    "캐릭터장",
-    "애니메이션장"
-  ];
-
-  for (const [index, name] of markets.entries()) {
-    await prisma.market.upsert({
-      where: { name },
-      update: { sortOrder: index },
-      create: {
-        name,
-        sortOrder: index,
-        isActive: true
-      }
-    });
-  }
+  await seedMarketsAndStocks(loadSeedData());
 
   const now = new Date();
   const season = await prisma.season.findFirst({ where: { status: SeasonStatus.ACTIVE } });
@@ -66,6 +80,156 @@ async function main() {
       }
     });
   }
+}
+
+function loadSeedData(): SeedData {
+  const localPath = join(__dirname, "seed-data.local.json");
+  const examplePath = join(__dirname, "seed-data.example.json");
+  const path = existsSync(localPath) ? localPath : examplePath;
+  return JSON.parse(readFileSync(path, "utf8")) as SeedData;
+}
+
+async function seedMarketsAndStocks(seedData: SeedData) {
+  for (const [index, marketSeed] of seedData.markets.entries()) {
+    const market = await prisma.market.upsert({
+      where: { name: marketSeed.name },
+      update: {
+        description: marketSeed.description,
+        iconUrl: marketSeed.iconUrl,
+        sortOrder: marketSeed.sortOrder ?? index,
+        isActive: marketSeed.isActive ?? true
+      },
+      create: {
+        name: marketSeed.name,
+        description: marketSeed.description,
+        iconUrl: marketSeed.iconUrl,
+        sortOrder: marketSeed.sortOrder ?? index,
+        isActive: marketSeed.isActive ?? true
+      }
+    });
+
+    for (const stockSeed of marketSeed.stocks ?? []) {
+      await seedStock(market.id, stockSeed);
+    }
+  }
+}
+
+async function seedStock(marketId: string, stockSeed: SeedStock) {
+  const currentPrice = new Prisma.Decimal(stockSeed.currentPrice);
+  const previousPrice = new Prisma.Decimal(stockSeed.previousPrice ?? stockSeed.currentPrice);
+  const initialPrice = new Prisma.Decimal(stockSeed.initialPrice ?? stockSeed.previousPrice ?? stockSeed.currentPrice);
+  const circulatingSupply = stockSeed.circulatingSupply ?? stockSeed.totalSupply;
+
+  const stock = await prisma.stock.upsert({
+    where: {
+      marketId_name: {
+        marketId,
+        name: stockSeed.name
+      }
+    },
+    update: {
+      description: stockSeed.description,
+      imageUrl: stockSeed.imageUrl,
+      tags: stockSeed.tags ?? [],
+      currentPrice,
+      previousPrice,
+      initialPrice,
+      totalSupply: stockSeed.totalSupply,
+      circulatingSupply,
+      volatilityLevel: stockSeed.volatilityLevel ?? 5,
+      dividendEnabled: stockSeed.dividendEnabled ?? false,
+      baseDividendRate: new Prisma.Decimal(stockSeed.baseDividendRate ?? 0),
+      isListed: stockSeed.isListed ?? true
+    },
+    create: {
+      marketId,
+      name: stockSeed.name,
+      description: stockSeed.description,
+      imageUrl: stockSeed.imageUrl,
+      tags: stockSeed.tags ?? [],
+      currentPrice,
+      previousPrice,
+      initialPrice,
+      totalSupply: stockSeed.totalSupply,
+      circulatingSupply,
+      volatilityLevel: stockSeed.volatilityLevel ?? 5,
+      dividendEnabled: stockSeed.dividendEnabled ?? false,
+      baseDividendRate: new Prisma.Decimal(stockSeed.baseDividendRate ?? 0),
+      isListed: stockSeed.isListed ?? true
+    }
+  });
+
+  const historyCount = await prisma.priceHistory.count({ where: { stockId: stock.id } });
+  if (historyCount === 0) {
+    await prisma.priceHistory.createMany({
+      data: buildDemoPriceHistory(stock.id, stockSeed.name, currentPrice, previousPrice)
+    });
+  }
+}
+
+function buildDemoPriceHistory(
+  stockId: string,
+  stockName: string,
+  currentPrice: Prisma.Decimal,
+  previousPrice: Prisma.Decimal
+) {
+  const now = Date.now();
+  const points: Array<{ createdAt: Date; price: Prisma.Decimal; reason: string }> = [];
+
+  for (let i = 29; i >= 1; i -= 1) {
+    points.push({
+      createdAt: new Date(now - i * 24 * 60 * 60 * 1000),
+      price: demoPrice(stockName, currentPrice, 30 - i, 0.82, 1.1),
+      reason: "SEED_DAILY"
+    });
+  }
+
+  for (let i = 23; i >= 1; i -= 1) {
+    points.push({
+      createdAt: new Date(now - i * 60 * 60 * 1000),
+      price: demoPrice(stockName, currentPrice, 80 - i, 0.94, 1.04),
+      reason: "SEED_HOURLY"
+    });
+  }
+
+  for (let i = 59; i >= 1; i -= 1) {
+    points.push({
+      createdAt: new Date(now - i * 60 * 1000),
+      price: demoPrice(stockName, currentPrice, 140 - i, 0.985, 1.015),
+      reason: "SEED_MINUTE"
+    });
+  }
+
+  points.push({
+    createdAt: new Date(now - 30_000),
+    price: previousPrice,
+    reason: "SEED_PREVIOUS"
+  });
+  points.push({
+    createdAt: new Date(now),
+    price: currentPrice,
+    reason: "SEED_CURRENT"
+  });
+
+  let lastPrice = points[0]?.price ?? currentPrice;
+  return points.map((point) => {
+    const changeRate = lastPrice.equals(0) ? new Prisma.Decimal(0) : point.price.minus(lastPrice).div(lastPrice).mul(100);
+    lastPrice = point.price;
+    return {
+      stockId,
+      price: point.price,
+      changeRate,
+      reason: point.reason,
+      createdAt: point.createdAt
+    };
+  });
+}
+
+function demoPrice(stockName: string, basePrice: Prisma.Decimal, index: number, minFactor: number, maxFactor: number) {
+  const seed = [...stockName].reduce((sum, char) => sum + char.charCodeAt(0), 0);
+  const wave = Math.sin((seed + index * 17) / 9);
+  const factor = minFactor + ((wave + 1) / 2) * (maxFactor - minFactor);
+  return new Prisma.Decimal(Math.max(1, Math.round(basePrice.toNumber() * factor)));
 }
 
 main()

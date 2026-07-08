@@ -48,11 +48,19 @@ export class AiAccountsService {
     private readonly tradingService: TradingService
   ) {}
 
-  list() {
-    return this.prisma.aiAccount.findMany({
+  async list() {
+    const accounts = await this.prisma.aiAccount.findMany({
       include: { user: true },
       orderBy: { createdAt: "desc" }
     });
+
+    return accounts.map((account) => ({
+      ...account,
+      nickname: account.user.nickname,
+      cash: account.user.cash,
+      totalAssetValue: account.user.totalAssetValue,
+      status: account.isActive && account.user.isActive ? "ACTIVE" : "INACTIVE"
+    }));
   }
 
   async create(dto: CreateAiAccountDto) {

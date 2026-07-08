@@ -39,6 +39,28 @@ const ScenarioAiOutput = z.object({
 
 type ScenarioAiOutput = z.infer<typeof ScenarioAiOutput>;
 
+export interface ScenarioAffectedStockResult {
+  stockId: string;
+  stockName: string;
+  beforePrice: Prisma.Decimal;
+  afterPrice: Prisma.Decimal;
+  appliedRate: Prisma.Decimal;
+  impactReason: string;
+}
+
+export interface ConditionalOrderExecutionResult {
+  orderId: string;
+  userId: string;
+  stockId: string;
+  type: string;
+  status: string;
+  tradeId?: string;
+  quantity: number;
+  triggerPrice: Prisma.Decimal;
+  executedPrice?: Prisma.Decimal;
+  failureReason?: string;
+}
+
 @Injectable()
 export class ScenariosService {
   constructor(
@@ -138,6 +160,9 @@ export class ScenariosService {
       throw new BadRequestException("No target stocks found for scenario.");
     }
 
+    const affectedStocks: ScenarioAffectedStockResult[] = [];
+    const conditionalOrderResults: ConditionalOrderExecutionResult[] = [];
+
     await this.prisma.$transaction(async (tx) => {
       for (const stock of targetStocks) {
         const changeRate = this.calculateChangeRate(scenario.type, scenario.sentiment, scenario.impactLevel, stock);
@@ -173,7 +198,16 @@ export class ScenariosService {
           }
         });
 
-        await this.conditionalOrdersService.processForStockInTx(tx, stock.id, newPrice);
+        const orderResult = await this.conditionalOrdersService.processForStockInTx(tx, stock.id, newPrice);
+        conditionalOrderResults.push(...orderResult.results);
+        affectedStocks.push({
+          stockId: stock.id,
+          stockName: stock.name,
+          beforePrice: oldPrice,
+          afterPrice: newPrice,
+          appliedRate: changeRate,
+          impactReason: `${scenario.type}_${scenario.sentiment}_IMPACT`
+        });
       }
 
       await tx.scenario.update({
@@ -185,7 +219,13 @@ export class ScenariosService {
     const aiTradeSummary = await this.aiAccountsService.runScenarioTrades(scenario.id);
     await this.rankingsService.recalculateAll();
     const appliedScenario = await this.get(id);
-    return { ...appliedScenario, aiTradeSummary };
+    return {
+      ...appliedScenario,
+      affectedStocks,
+      conditionalOrderResults,
+      aiTradeSummary,
+      aiTradeResults: aiTradeSummary.results
+    };
   }
 
   private async buildScenarioContext(dto: GenerateScenarioDto) {

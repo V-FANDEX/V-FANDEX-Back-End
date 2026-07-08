@@ -7,11 +7,22 @@ import { UpdateMarketDto } from "./dto/update-market.dto";
 export class MarketsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  list(includeInactive = false) {
-    return this.prisma.market.findMany({
+  async list(includeInactive = false) {
+    const markets = await this.prisma.market.findMany({
       where: includeInactive ? undefined : { isActive: true },
+      include: {
+        _count: {
+          select: { stocks: true }
+        }
+      },
       orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }]
     });
+
+    return markets.map((market) => ({
+      ...market,
+      stockCount: market._count.stocks,
+      status: market.isActive ? "ACTIVE" : "INACTIVE"
+    }));
   }
 
   async get(id: string) {

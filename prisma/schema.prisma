@@ -221,6 +221,9 @@ model DividendSetting {
   claimCountMultiplier  Decimal  @default(0.1) @db.Decimal(10, 6)
   claimCooldownMinutes  Int      @default(1440)
   seasonalClaimLimit    Int      @default(30)
+  isEnabled             Boolean  @default(false)
+  lastRunAt             DateTime?
+  nextRunAt             DateTime?
   updatedAt             DateTime @updatedAt
 }
 

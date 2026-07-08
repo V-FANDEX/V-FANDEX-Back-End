@@ -1,5 +1,5 @@
-import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
-import { Prisma, SeasonStatus } from "@prisma/client";
+import { BadRequestException, Injectable, Logger, NotFoundException, OnModuleDestroy, OnModuleInit } from "@nestjs/common";
+import { Prisma, Role, SeasonStatus } from "@prisma/client";
 import { money, rate, zero } from "../common/utils/decimal";
 import { PrismaService } from "../prisma/prisma.service";
 import { RankingsService } from "../rankings/rankings.service";
@@ -7,11 +7,28 @@ import { ClaimDividendDto } from "./dto/claim-dividend.dto";
 import { UpdateDividendSettingsDto } from "./dto/update-dividend-settings.dto";
 
 @Injectable()
-export class DividendsService {
+export class DividendsService implements OnModuleInit, OnModuleDestroy {
+  private readonly logger = new Logger(DividendsService.name);
+  private scheduler?: NodeJS.Timeout;
+  private autoPayoutRunning = false;
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly rankingsService: RankingsService
   ) {}
+
+  onModuleInit() {
+    this.scheduler = setInterval(() => {
+      void this.processScheduledDividends();
+    }, 60_000);
+    void this.processScheduledDividends();
+  }
+
+  onModuleDestroy() {
+    if (this.scheduler) {
+      clearInterval(this.scheduler);
+    }
+  }
 
   listMine(userId: string) {
     return this.prisma.dividend.findMany({
@@ -102,21 +119,118 @@ export class DividendsService {
   }
 
   async updateSettings(dto: UpdateDividendSettingsDto) {
+    const current = await this.getSettings();
+    const nextRunAt = this.resolveNextRunAt(dto, current);
+
     return this.prisma.dividendSetting.upsert({
       where: { id: "default" },
       create: {
         baseDividendRate: dto.baseDividendRate === undefined ? undefined : rate(dto.baseDividendRate),
         claimCountMultiplier: dto.claimCountMultiplier === undefined ? undefined : rate(dto.claimCountMultiplier),
         claimCooldownMinutes: dto.claimCooldownMinutes,
-        seasonalClaimLimit: dto.seasonalClaimLimit
+        seasonalClaimLimit: dto.seasonalClaimLimit,
+        isEnabled: dto.isEnabled,
+        nextRunAt
       },
       update: {
         baseDividendRate: dto.baseDividendRate === undefined ? undefined : rate(dto.baseDividendRate),
         claimCountMultiplier: dto.claimCountMultiplier === undefined ? undefined : rate(dto.claimCountMultiplier),
         claimCooldownMinutes: dto.claimCooldownMinutes,
-        seasonalClaimLimit: dto.seasonalClaimLimit
+        seasonalClaimLimit: dto.seasonalClaimLimit,
+        isEnabled: dto.isEnabled,
+        nextRunAt
       }
     });
+  }
+
+  async processScheduledDividends(force = false) {
+    if (this.autoPayoutRunning) {
+      return null;
+    }
+
+    const settings = await this.getSettings();
+    if (!force && !settings.isEnabled) {
+      return null;
+    }
+
+    const now = new Date();
+    if (!force && settings.nextRunAt && settings.nextRunAt > now) {
+      return null;
+    }
+
+    this.autoPayoutRunning = true;
+    try {
+      const users = await this.prisma.user.findMany({
+        where: {
+          role: { in: [Role.USER, Role.AI] },
+          isActive: true
+        },
+        select: { id: true }
+      });
+
+      const results = [];
+      for (const user of users) {
+        try {
+          const dividend = await this.claim(user.id, {});
+          results.push({
+            userId: user.id,
+            status: "PAID",
+            dividendId: dividend.id,
+            amount: dividend.amount
+          });
+        } catch (error) {
+          results.push({
+            userId: user.id,
+            status: "SKIPPED",
+            reason: error instanceof Error ? error.message : "Dividend payout skipped."
+          });
+        }
+      }
+
+      const completedAt = new Date();
+      const nextRunAt = new Date(completedAt.getTime() + settings.claimCooldownMinutes * 60_000);
+      await this.prisma.dividendSetting.update({
+        where: { id: "default" },
+        data: {
+          lastRunAt: completedAt,
+          nextRunAt
+        }
+      });
+
+      return {
+        ok: true,
+        paidCount: results.filter((result) => result.status === "PAID").length,
+        skippedCount: results.filter((result) => result.status === "SKIPPED").length,
+        lastRunAt: completedAt,
+        nextRunAt,
+        results
+      };
+    } catch (error) {
+      this.logger.error(error instanceof Error ? error.message : "Scheduled dividend payout failed.");
+      throw error;
+    } finally {
+      this.autoPayoutRunning = false;
+    }
+  }
+
+  private resolveNextRunAt(
+    dto: UpdateDividendSettingsDto,
+    current: Awaited<ReturnType<DividendsService["getSettings"]>>
+  ) {
+    if (dto.nextRunAt) {
+      return new Date(dto.nextRunAt);
+    }
+
+    if (dto.isEnabled && !current.isEnabled) {
+      return new Date();
+    }
+
+    if (dto.claimCooldownMinutes !== undefined && current.nextRunAt) {
+      const lastRunAt = current.lastRunAt ?? new Date();
+      return new Date(lastRunAt.getTime() + dto.claimCooldownMinutes * 60_000);
+    }
+
+    return undefined;
   }
 
   private async calculateBasis(

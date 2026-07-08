@@ -80,6 +80,7 @@ export class ConditionalOrdersService {
       orderBy: { createdAt: "asc" }
     });
     const affectedUserIds = new Set<string>();
+    const results = [];
 
     for (const order of orders) {
       const shouldTrigger =
@@ -92,7 +93,7 @@ export class ConditionalOrdersService {
       }
 
       try {
-        await this.tradingService.executeTradeInTx(tx, {
+        const trade = await this.tradingService.executeTradeInTx(tx, {
           userId: order.userId,
           stockId: order.stockId,
           type: order.type,
@@ -104,19 +105,44 @@ export class ConditionalOrdersService {
           data: { status: ConditionalOrderStatus.TRIGGERED, triggeredAt: new Date() }
         });
         affectedUserIds.add(order.userId);
+        results.push({
+          orderId: order.id,
+          userId: order.userId,
+          stockId: order.stockId,
+          type: order.type,
+          status: ConditionalOrderStatus.TRIGGERED,
+          tradeId: trade.id,
+          quantity: order.quantity,
+          triggerPrice: order.triggerPrice,
+          executedPrice: trade.price
+        });
       } catch (error) {
+        const failureReason = error instanceof Error ? error.message : "Conditional order execution failed.";
         await tx.conditionalOrder.update({
           where: { id: order.id },
           data: {
             status: ConditionalOrderStatus.FAILED,
-            failureReason: error instanceof Error ? error.message : "Conditional order execution failed.",
+            failureReason,
             triggeredAt: new Date()
           }
+        });
+        results.push({
+          orderId: order.id,
+          userId: order.userId,
+          stockId: order.stockId,
+          type: order.type,
+          status: ConditionalOrderStatus.FAILED,
+          quantity: order.quantity,
+          triggerPrice: order.triggerPrice,
+          failureReason
         });
       }
     }
 
-    return [...affectedUserIds];
+    return {
+      affectedUserIds: [...affectedUserIds],
+      results
+    };
   }
 
   async recalculateAffectedRankings(userIds: string[]) {

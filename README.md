@@ -40,6 +40,17 @@ ADMIN_EMAIL=admin@v-fandex.local
 ADMIN_PASSWORD=ChangeMe123!
 ```
 
+## Fixed Demo Markets And Stocks
+
+Default demo markets and stocks are defined in `prisma/seed-data.example.json`. To customize the fixed markets and stocks used before a season starts, copy it to a local seed file and edit the names, images, tags, prices, supply, volatility, and dividend options there:
+
+```bash
+cp prisma/seed-data.example.json prisma/seed-data.local.json
+npm run db:seed
+```
+
+`prisma/seed-data.local.json` is ignored by Git, so local or production seed data can be managed separately without committing it. Each market can contain a `stocks` array. Each stock supports `name`, `description`, `imageUrl`, `tags`, `currentPrice`, `previousPrice`, `totalSupply`, `circulatingSupply`, `volatilityLevel`, `dividendEnabled`, and `baseDividendRate`.
+
 ## Main Domains
 
 - Auth: register, login, current user
