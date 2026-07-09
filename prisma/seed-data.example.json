@@ -1,8 +1,8 @@
 {
   "markets": [
     {
-      "name": "버츄얼&스트리머장",
-      "description": "버츄얼 크리에이터와 스트리머 기반 데모 시장",
+      "name": "VEX",
+      "description": "버츄얼 크리에이터와 스트리머 기반 시장",
       "iconUrl": "https://api.dicebear.com/9.x/shapes/svg?seed=virtual-market",
       "sortOrder": 0,
       "stocks": [
@@ -48,8 +48,8 @@
       ]
     },
     {
-      "name": "가수장",
-      "description": "아티스트와 음악 콘텐츠 기반 데모 시장",
+      "name": "MEX",
+      "description": "아티스트와 음악 콘텐츠 기반 시장",
       "iconUrl": "https://api.dicebear.com/9.x/shapes/svg?seed=singer-market",
       "sortOrder": 1,
       "stocks": [
@@ -95,8 +95,8 @@
       ]
     },
     {
-      "name": "캐릭터장",
-      "description": "오리지널 캐릭터와 IP 기반 데모 시장",
+      "name": "CEX",
+      "description": "오리지널 캐릭터와 IP 기반 시장",
       "iconUrl": "https://api.dicebear.com/9.x/shapes/svg?seed=character-market",
       "sortOrder": 2,
       "stocks": [
@@ -142,8 +142,8 @@
       ]
     },
     {
-      "name": "애니메이션장",
-      "description": "애니메이션 작품과 시즌 콘텐츠 기반 데모 시장",
+      "name": "AEX",
+      "description": "애니메이션 작품과 시즌 콘텐츠 기반 시장",
       "iconUrl": "https://api.dicebear.com/9.x/shapes/svg?seed=animation-market",
       "sortOrder": 3,
       "stocks": [
