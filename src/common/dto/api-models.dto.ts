@@ -528,6 +528,59 @@ export class SeasonResponseDto {
   status: SeasonStatus;
 }
 
+export class SeasonResetResponseDto {
+  @ApiProperty()
+  seasonId: string;
+
+  @ApiProperty({ example: "SEED_CATALOG_ONLY" })
+  resetMode: string;
+
+  @ApiProperty()
+  usersReset: number;
+
+  @ApiProperty()
+  holdingsCleared: number;
+
+  @ApiProperty()
+  conditionalOrdersCleared: number;
+
+  @ApiProperty()
+  watchlistItemsCleared: number;
+
+  @ApiProperty()
+  tradesCleared: number;
+
+  @ApiProperty()
+  dividendsCleared: number;
+
+  @ApiProperty()
+  rankingsCleared: number;
+
+  @ApiProperty()
+  scenarioImpactsCleared: number;
+
+  @ApiProperty()
+  scenariosCleared: number;
+
+  @ApiProperty()
+  priceHistoriesCleared: number;
+
+  @ApiProperty()
+  nonSeedStocksDeleted: number;
+
+  @ApiProperty()
+  nonSeedMarketsDeleted: number;
+
+  @ApiProperty()
+  seedMarketsApplied: number;
+
+  @ApiProperty()
+  seedStocksApplied: number;
+
+  @ApiProperty()
+  seedPriceHistoriesCreated: number;
+}
+
 export class AiAccountResponseDto {
   @ApiProperty()
   id: string;

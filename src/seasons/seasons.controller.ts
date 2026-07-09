@@ -1,7 +1,7 @@
 import { Body, Controller, Get, Param, Post, UseGuards } from "@nestjs/common";
 import { ApiBearerAuth, ApiCreatedResponse, ApiOkResponse, ApiTags } from "@nestjs/swagger";
 import { Role } from "@prisma/client";
-import { SeasonResponseDto } from "../common/dto/api-models.dto";
+import { SeasonResetResponseDto, SeasonResponseDto } from "../common/dto/api-models.dto";
 import { Roles } from "../common/decorators/roles.decorator";
 import { JwtAuthGuard } from "../common/guards/jwt-auth.guard";
 import { RolesGuard } from "../common/guards/roles.guard";
@@ -39,7 +39,7 @@ export class SeasonsController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.ADMIN)
   @ApiBearerAuth()
-  @ApiOkResponse({ type: SeasonResponseDto })
+  @ApiOkResponse({ type: SeasonResetResponseDto })
   reset(@Param("id") id: string, @Body() dto: ResetSeasonDto) {
     return this.seasonsService.reset(id, dto);
   }

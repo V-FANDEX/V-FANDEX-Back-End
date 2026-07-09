@@ -51,6 +51,8 @@ npm run db:seed
 
 `prisma/seed-data.local.json` is ignored by Git, so local or production seed data can be managed separately without committing it. Each market can contain a `stocks` array. Each stock supports `name`, `description`, `imageUrl`, `tags`, `currentPrice`, `previousPrice`, `totalSupply`, `circulatingSupply`, `volatilityLevel`, `dividendEnabled`, and `baseDividendRate`.
 
+Season reset keeps only the seed catalog. `POST /admin/seasons/:id/reset` clears holdings, orders, watchlists, trades, dividends, rankings, scenarios, impacts, and price history, deletes markets/stocks that are not present in the seed data, reapplies the seed markets/stocks, and resets USER/AI cash to the season initial cash. User, admin, and AI accounts themselves are not deleted.
+
 ## Main Domains
 
 - Auth: register, login, current user
