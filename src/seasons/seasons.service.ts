@@ -102,33 +102,39 @@ export class SeasonsService {
 
     const seedData = this.loadSeedData();
     const initialCash = money(season.initialCash);
-    const result = await this.prisma.$transaction(async (tx) => {
-      await tx.season.updateMany({
-        where: { status: SeasonStatus.ACTIVE, id: { not: id } },
-        data: { status: SeasonStatus.ENDED }
-      });
-      await tx.season.update({ where: { id }, data: { status: SeasonStatus.ACTIVE } });
+    const result = await this.prisma.$transaction(
+      async (tx) => {
+        await tx.season.updateMany({
+          where: { status: SeasonStatus.ACTIVE, id: { not: id } },
+          data: { status: SeasonStatus.ENDED }
+        });
+        await tx.season.update({ where: { id }, data: { status: SeasonStatus.ACTIVE } });
 
-      const cleared = await this.clearSimulationDataInTx(tx);
-      const catalog = await this.resetCatalogFromSeedInTx(tx, seedData);
+        const cleared = await this.clearSimulationDataInTx(tx);
+        const catalog = await this.resetCatalogFromSeedInTx(tx, seedData);
 
-      const users = await tx.user.updateMany({
-        where: { role: { in: [Role.USER, Role.AI] } },
-        data: {
-          cash: initialCash,
-          initialCash,
-          totalAssetValue: initialCash
-        }
-      });
+        const users = await tx.user.updateMany({
+          where: { role: { in: [Role.USER, Role.AI] } },
+          data: {
+            cash: initialCash,
+            initialCash,
+            totalAssetValue: initialCash
+          }
+        });
 
-      return {
-        seasonId: id,
-        resetMode: "SEED_CATALOG_ONLY",
-        usersReset: users.count,
-        ...cleared,
-        ...catalog
-      };
-    });
+        return {
+          seasonId: id,
+          resetMode: "SEED_CATALOG_ONLY",
+          usersReset: users.count,
+          ...cleared,
+          ...catalog
+        };
+      },
+      {
+        maxWait: 10_000,
+        timeout: 60_000
+      }
+    );
 
     await this.rankingsService.recalculateAll(id);
     return result;
