@@ -77,6 +77,20 @@ npm run prisma:migrate
 npm run prisma:studio
 ```
 
+## Market Simulation
+
+The server can move listed stock prices without calling GPT. Admins can manage the scheduler and volatility from:
+
+```text
+GET /admin/market-simulation/settings
+PATCH /admin/market-simulation/settings
+POST /admin/market-simulation/run
+```
+
+Normal moves use `minChangeRate` and `maxChangeRate`. Occasional high-risk moves use `extremeMinRate`, `extremeMaxRate`, and `extremeChance`; the default extreme range is `-80%` to `+300%`. Downside moves are clamped so prices never become negative. Each run writes price history, checks conditional orders, and recalculates rankings.
+
+On free hosts that sleep, scheduled runs only happen while the server is awake. Use `POST /admin/market-simulation/run` or an external cron/ping service if stricter timing is needed.
+
 ## AI Account Behavior
 
 AI accounts are simulated traders, not login users. They are created by admins with `role=AI`, no password, and their trades always go through the same buy/sell service used by normal users.

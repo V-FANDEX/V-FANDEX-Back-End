@@ -14,6 +14,8 @@ import { DividendsService } from "./dividends/dividends.service";
 import { HealthController } from "./health/health.controller";
 import { MarketsController } from "./markets/markets.controller";
 import { MarketsService } from "./markets/markets.service";
+import { MarketSimulationController } from "./market-simulation/market-simulation.controller";
+import { MarketSimulationService } from "./market-simulation/market-simulation.service";
 import { PortfolioController } from "./portfolio/portfolio.controller";
 import { PortfolioService } from "./portfolio/portfolio.service";
 import { PrismaService } from "./prisma/prisma.service";
@@ -51,6 +53,7 @@ import { WatchlistService } from "./watchlist/watchlist.service";
     DividendsController,
     HealthController,
     MarketsController,
+    MarketSimulationController,
     PortfolioController,
     RankingsController,
     ScenariosController,
@@ -66,6 +69,7 @@ import { WatchlistService } from "./watchlist/watchlist.service";
     ConditionalOrdersService,
     DividendsService,
     MarketsService,
+    MarketSimulationService,
     PortfolioService,
     PrismaService,
     RankingsService,

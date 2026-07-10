@@ -65,6 +65,12 @@ async function main() {
     update: {}
   });
 
+  await prisma.marketSimulationSetting.upsert({
+    where: { id: "default" },
+    create: {},
+    update: {}
+  });
+
   await seedMarketsAndStocks(loadSeedData());
 
   const now = new Date();

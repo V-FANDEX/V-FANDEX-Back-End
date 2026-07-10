@@ -666,3 +666,87 @@ export class AdminDashboardResponseDto {
   @ApiProperty({ type: [MarketVolumeSeriesPointDto] })
   marketVolumeSeries: MarketVolumeSeriesPointDto[];
 }
+
+export class MarketSimulationSettingResponseDto {
+  @ApiProperty()
+  id: string;
+
+  @ApiProperty()
+  isEnabled: boolean;
+
+  @ApiProperty()
+  intervalMinutes: number;
+
+  @ApiProperty({ example: "-7.000000" })
+  minChangeRate: string;
+
+  @ApiProperty({ example: "7.000000" })
+  maxChangeRate: string;
+
+  @ApiProperty({ example: "-80.000000" })
+  extremeMinRate: string;
+
+  @ApiProperty({ example: "300.000000" })
+  extremeMaxRate: string;
+
+  @ApiProperty({ example: "0.040000" })
+  extremeChance: string;
+
+  @ApiProperty({ example: "1.000000" })
+  volatilityWeight: string;
+
+  @ApiPropertyOptional({ nullable: true })
+  targetStockCount?: number | null;
+
+  @ApiPropertyOptional({ nullable: true })
+  lastRunAt?: Date | null;
+
+  @ApiPropertyOptional({ nullable: true })
+  nextRunAt?: Date | null;
+
+  @ApiProperty()
+  updatedAt: Date;
+}
+
+export class MarketSimulationAffectedStockDto {
+  @ApiProperty()
+  stockId: string;
+
+  @ApiProperty()
+  stockName: string;
+
+  @ApiProperty({ example: "10000.0000" })
+  beforePrice: string;
+
+  @ApiProperty({ example: "12000.0000" })
+  afterPrice: string;
+
+  @ApiProperty({ example: "20.000000" })
+  appliedRate: string;
+
+  @ApiProperty({ enum: ["NORMAL", "EXTREME"] })
+  mode: "NORMAL" | "EXTREME";
+
+  @ApiProperty()
+  reason: string;
+}
+
+export class MarketSimulationRunResponseDto {
+  @ApiProperty()
+  ok: boolean;
+
+  @ApiProperty({ enum: ["MANUAL", "SCHEDULED"] })
+  mode: "MANUAL" | "SCHEDULED";
+
+  @ApiProperty()
+  affectedCount: number;
+
+  @ApiProperty({ type: [MarketSimulationAffectedStockDto] })
+  affectedStocks: MarketSimulationAffectedStockDto[];
+
+  @ApiProperty({ type: [Object] })
+  conditionalOrderResults: Array<Record<string, unknown>>;
+
+  @ApiPropertyOptional({ nullable: true })
+  nextRunAt?: Date | null;
+}

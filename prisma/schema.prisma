@@ -227,6 +227,22 @@ model DividendSetting {
   updatedAt             DateTime @updatedAt
 }
 
+model MarketSimulationSetting {
+  id                 String   @id @default("default")
+  isEnabled          Boolean  @default(false)
+  intervalMinutes    Int      @default(5)
+  minChangeRate      Decimal  @default(-7) @db.Decimal(10, 6)
+  maxChangeRate      Decimal  @default(7) @db.Decimal(10, 6)
+  extremeMinRate     Decimal  @default(-80) @db.Decimal(10, 6)
+  extremeMaxRate     Decimal  @default(300) @db.Decimal(10, 6)
+  extremeChance      Decimal  @default(0.04) @db.Decimal(10, 6)
+  volatilityWeight   Decimal  @default(1) @db.Decimal(10, 6)
+  targetStockCount   Int?
+  lastRunAt          DateTime?
+  nextRunAt          DateTime?
+  updatedAt          DateTime @updatedAt
+}
+
 model Watchlist {
   id        String   @id @default(cuid())
   userId    String
