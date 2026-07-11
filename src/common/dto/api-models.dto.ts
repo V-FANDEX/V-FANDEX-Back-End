@@ -112,6 +112,30 @@ export class StockResponseDto {
   @ApiProperty({ example: "13800.0000" })
   initialPrice: string;
 
+  @ApiPropertyOptional({ nullable: true, example: "15500.0000" })
+  targetPrice?: string | null;
+
+  @ApiPropertyOptional({ nullable: true, example: "14200.0000" })
+  movementStartPrice?: string | null;
+
+  @ApiPropertyOptional({ nullable: true })
+  movementStartedAt?: Date | null;
+
+  @ApiPropertyOptional({ nullable: true })
+  movementEndsAt?: Date | null;
+
+  @ApiPropertyOptional({ nullable: true })
+  movementReason?: string | null;
+
+  @ApiPropertyOptional()
+  isPriceMoving?: boolean;
+
+  @ApiPropertyOptional({ minimum: 0, maximum: 1 })
+  priceMovementProgress?: number;
+
+  @ApiPropertyOptional()
+  priceAsOf?: Date;
+
   @ApiProperty()
   totalSupply: number;
 
@@ -156,6 +180,50 @@ export class StockResponseDto {
 
   @ApiProperty()
   updatedAt: Date;
+}
+
+export class StockQuoteResponseDto {
+  @ApiProperty()
+  id: string;
+
+  @ApiProperty()
+  marketId: string;
+
+  @ApiProperty()
+  name: string;
+
+  @ApiProperty({ example: "14200.0000" })
+  currentPrice: string;
+
+  @ApiProperty({ example: "13800.0000" })
+  previousPrice: string;
+
+  @ApiProperty({ example: "2.898551" })
+  changeRate: string;
+
+  @ApiPropertyOptional({ nullable: true })
+  targetPrice?: string | null;
+
+  @ApiPropertyOptional({ nullable: true })
+  movementStartPrice?: string | null;
+
+  @ApiPropertyOptional({ nullable: true })
+  movementStartedAt?: Date | null;
+
+  @ApiPropertyOptional({ nullable: true })
+  movementEndsAt?: Date | null;
+
+  @ApiPropertyOptional({ nullable: true })
+  movementReason?: string | null;
+
+  @ApiProperty()
+  isPriceMoving: boolean;
+
+  @ApiProperty({ minimum: 0, maximum: 1 })
+  priceMovementProgress: number;
+
+  @ApiProperty()
+  priceAsOf: Date;
 }
 
 export class PriceHistoryResponseDto {
@@ -707,6 +775,24 @@ export class MarketSimulationSettingResponseDto {
   @ApiPropertyOptional({ nullable: true })
   targetStockCount?: number | null;
 
+  @ApiProperty()
+  priceMovementEnabled: boolean;
+
+  @ApiProperty({ example: 30 })
+  priceTickSeconds: number;
+
+  @ApiProperty({ example: 3 })
+  minMovementMinutes: number;
+
+  @ApiProperty({ example: 8 })
+  maxMovementMinutes: number;
+
+  @ApiPropertyOptional({ nullable: true })
+  lastPriceTickAt?: Date | null;
+
+  @ApiPropertyOptional({ nullable: true })
+  nextPriceTickAt?: Date | null;
+
   @ApiPropertyOptional({ nullable: true })
   lastRunAt?: Date | null;
 
@@ -730,6 +816,9 @@ export class MarketSimulationAffectedStockDto {
   @ApiProperty({ example: "12000.0000" })
   afterPrice: string;
 
+  @ApiProperty({ example: "12000.0000" })
+  targetPrice: string;
+
   @ApiProperty({ example: "20.000000" })
   appliedRate: string;
 
@@ -738,6 +827,15 @@ export class MarketSimulationAffectedStockDto {
 
   @ApiProperty()
   reason: string;
+
+  @ApiProperty()
+  movementStartedAt: Date;
+
+  @ApiProperty()
+  movementEndsAt: Date;
+
+  @ApiProperty()
+  movementDurationMinutes: number;
 }
 
 export class MarketSimulationRunResponseDto {
@@ -761,6 +859,55 @@ export class MarketSimulationRunResponseDto {
 
   @ApiPropertyOptional({ nullable: true, example: 11 })
   scheduledIntervalMinutes?: number | null;
+}
+
+export class PriceMovementAffectedStockDto {
+  @ApiProperty()
+  stockId: string;
+
+  @ApiProperty()
+  stockName: string;
+
+  @ApiProperty({ example: "10000.0000" })
+  beforePrice: string;
+
+  @ApiProperty({ example: "10250.0000" })
+  afterPrice: string;
+
+  @ApiProperty({ example: "12000.0000" })
+  targetPrice: string;
+
+  @ApiProperty()
+  reachedTarget: boolean;
+
+  @ApiPropertyOptional({ nullable: true })
+  movementReason?: string | null;
+}
+
+export class PriceMovementTickResponseDto {
+  @ApiProperty()
+  ok: boolean;
+
+  @ApiProperty()
+  affectedCount: number;
+
+  @ApiProperty()
+  reachedTargetCount: number;
+
+  @ApiProperty({ type: [PriceMovementAffectedStockDto] })
+  affectedStocks: PriceMovementAffectedStockDto[];
+
+  @ApiProperty({ type: [Object] })
+  conditionalOrderResults: Array<Record<string, unknown>>;
+
+  @ApiProperty({ type: [String] })
+  affectedUserIds: string[];
+
+  @ApiProperty()
+  lastPriceTickAt: Date;
+
+  @ApiProperty()
+  nextPriceTickAt: Date;
 }
 
 export class ScenarioAutomationSettingResponseDto {

@@ -120,6 +120,35 @@ export class UpdateMarketSimulationSettingsDto {
   @Min(1)
   targetStockCount?: number;
 
+  @ApiPropertyOptional({ description: "Moves current prices gradually toward event target prices." })
+  @IsOptional()
+  @IsBoolean()
+  priceMovementEnabled?: boolean;
+
+  @ApiPropertyOptional({ minimum: 10, maximum: 300, example: 30 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(10)
+  @Max(300)
+  priceTickSeconds?: number;
+
+  @ApiPropertyOptional({ minimum: 1, maximum: 1440, example: 3 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(1440)
+  minMovementMinutes?: number;
+
+  @ApiPropertyOptional({ minimum: 1, maximum: 1440, example: 8 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(1440)
+  maxMovementMinutes?: number;
+
   @ApiPropertyOptional({
     description: "Optional ISO datetime for the next automatic run.",
   })

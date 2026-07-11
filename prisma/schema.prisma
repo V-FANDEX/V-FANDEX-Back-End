@@ -117,6 +117,12 @@ model Stock {
   currentPrice       Decimal            @db.Decimal(20, 4)
   previousPrice      Decimal            @db.Decimal(20, 4)
   initialPrice       Decimal            @db.Decimal(20, 4)
+  targetPrice        Decimal?           @db.Decimal(20, 4)
+  movementStartPrice Decimal?           @db.Decimal(20, 4)
+  movementStartedAt  DateTime?
+  movementEndsAt     DateTime?
+  movementReason     String?
+  lastPriceHistoryAt DateTime?
   totalSupply        Int
   circulatingSupply  Int
   volatilityLevel    Int                @default(5)
@@ -139,6 +145,7 @@ model Stock {
   @@unique([marketId, name])
   @@index([marketId, isListed])
   @@index([currentPrice])
+  @@index([targetPrice])
 }
 
 model Holding {
@@ -241,6 +248,12 @@ model MarketSimulationSetting {
   extremeChance         Decimal   @default(0.04) @db.Decimal(10, 6)
   volatilityWeight      Decimal   @default(1) @db.Decimal(10, 6)
   targetStockCount      Int?
+  priceMovementEnabled  Boolean   @default(true)
+  priceTickSeconds      Int       @default(30)
+  minMovementMinutes    Int       @default(3)
+  maxMovementMinutes    Int       @default(8)
+  lastPriceTickAt       DateTime?
+  nextPriceTickAt       DateTime?
   lastRunAt             DateTime?
   nextRunAt             DateTime?
   updatedAt             DateTime  @updatedAt

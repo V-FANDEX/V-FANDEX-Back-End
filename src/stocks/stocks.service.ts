@@ -1,7 +1,8 @@
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
-import { Prisma } from "@prisma/client";
+import { Prisma, Stock } from "@prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
 import { money, rate } from "../common/utils/decimal";
+import { withLivePrice } from "../price-movements/price-movement.utils";
 import { CreateStockDto } from "./dto/create-stock.dto";
 import { UpdateListingStatusDto } from "./dto/update-listing-status.dto";
 import { UpdateStockDto } from "./dto/update-stock.dto";
@@ -42,6 +43,34 @@ export class StocksService {
     return (await this.withMarketMetrics([stock]))[0];
   }
 
+  async quotes(marketId?: string) {
+    const stocks = await this.prisma.stock.findMany({
+      where: { marketId, isListed: true, isTradingSuspended: false },
+      select: {
+        id: true,
+        marketId: true,
+        name: true,
+        currentPrice: true,
+        previousPrice: true,
+        targetPrice: true,
+        movementStartPrice: true,
+        movementStartedAt: true,
+        movementEndsAt: true,
+        movementReason: true,
+      },
+      orderBy: { name: "asc" },
+    });
+    const priceAsOf = new Date();
+
+    return stocks.map((stock) => {
+      const liveStock = withLivePrice(stock, priceAsOf);
+      const changeRate = stock.previousPrice.lessThanOrEqualTo(0)
+        ? rate(0)
+        : rate(liveStock.currentPrice.minus(stock.previousPrice).div(stock.previousPrice).mul(100));
+      return { ...liveStock, changeRate };
+    });
+  }
+
   async create(dto: CreateStockDto) {
     const market = await this.prisma.market.findUnique({ where: { id: dto.marketId }, select: { id: true } });
     if (!market) {
@@ -55,7 +84,7 @@ export class StocksService {
     }
 
     try {
-      return await this.prisma.stock.create({
+      const stock = await this.prisma.stock.create({
         data: {
           marketId: dto.marketId,
           name: dto.name,
@@ -81,6 +110,7 @@ export class StocksService {
         },
         include: { market: true }
       });
+      return (await this.withMarketMetrics([stock]))[0];
     } catch {
       throw new BadRequestException("Stock name is already listed in this market.");
     }
@@ -106,16 +136,17 @@ export class StocksService {
       data.initialPrice = money(dto.initialPrice);
     }
 
-    return this.prisma.stock.update({
+    const stock = await this.prisma.stock.update({
       where: { id },
       data,
       include: { market: true }
     });
+    return (await this.withMarketMetrics([stock]))[0];
   }
 
   async updateListingStatus(id: string, dto: UpdateListingStatusDto) {
     await this.ensureExists(id);
-    return this.prisma.stock.update({
+    const stock = await this.prisma.stock.update({
       where: { id },
       data: {
         isListed: dto.isListed,
@@ -123,6 +154,7 @@ export class StocksService {
         delistedAt: dto.isListed ? null : new Date()
       }
     });
+    return (await this.withMarketMetrics([stock]))[0];
   }
 
   async chartData(id: string, options: { take?: number; interval?: string } = {}) {
@@ -148,7 +180,18 @@ export class StocksService {
     return this.bucketChartRows(rows, interval, take);
   }
 
-  private async withMarketMetrics<T extends { id: string; currentPrice: Prisma.Decimal; circulatingSupply: number }>(
+  private async withMarketMetrics<
+    T extends Pick<
+      Stock,
+      | "id"
+      | "currentPrice"
+      | "targetPrice"
+      | "movementStartPrice"
+      | "movementStartedAt"
+      | "movementEndsAt"
+      | "circulatingSupply"
+    >,
+  >(
     stocks: T[]
   ) {
     if (!stocks.length) {
@@ -166,12 +209,14 @@ export class StocksService {
     });
     const tradeSummaryByStockId = new Map(tradeSummaries.map((summary) => [summary.stockId, summary]));
 
+    const priceAsOf = new Date();
     return stocks.map((stock) => {
       const tradeSummary = tradeSummaryByStockId.get(stock.id);
-      const marketCap = money(stock.currentPrice.mul(stock.circulatingSupply));
+      const liveStock = withLivePrice(stock, priceAsOf);
+      const marketCap = money(liveStock.currentPrice.mul(stock.circulatingSupply));
 
       return {
-        ...stock,
+        ...liveStock,
         volume: tradeSummary?._sum.quantity ?? 0,
         tradeValue: tradeSummary?._sum.totalAmount ?? 0,
         marketCap,

@@ -91,6 +91,22 @@ Normal moves use `minChangeRate` and `maxChangeRate`. Occasional high-risk moves
 
 Set `randomIntervalEnabled=true`, `minIntervalMinutes=5`, and `maxIntervalMinutes=15` to schedule each price update at a new random interval between 5 and 15 minutes. Set `randomIntervalEnabled=false` to use the fixed `intervalMinutes` value instead. The scheduler remains inactive until `isEnabled=true` is saved.
 
+### Gradual Price Movement
+
+Market simulations and applied GPT scenarios set a target price instead of replacing `currentPrice` immediately. The server advances active prices every `priceTickSeconds` and records chart history at most once per minute while a stock is moving. Default movement duration is randomly selected between `minMovementMinutes=3` and `maxMovementMinutes=8`.
+
+SMALL scenarios use the base duration, MAIN scenarios use twice the base duration, and BIG scenarios use three times the base duration. If another event arrives before the old target is reached, the server calculates the live price at that instant and starts a new path toward the latest target. Conditional orders are checked against each actual intermediate price rather than the future target price.
+
+Stock responses include `targetPrice`, `movementStartPrice`, `movementStartedAt`, `movementEndsAt`, `movementReason`, `isPriceMoving`, `priceMovementProgress`, and `priceAsOf`. Frontends can use these fields to animate between API polls while all trades use the same server-side movement curve.
+
+For lightweight polling, use `GET /stocks/quotes` or filter it with `GET /stocks/quotes?marketId=:marketId`. It returns only the live quote and movement fields, avoiding repeated trade-volume and chart queries.
+
+Admins can force one movement tick for diagnostics:
+
+```text
+POST /admin/market-simulation/price-tick
+```
+
 ## Automatic GPT Scenarios
 
 Automatic MAIN and SMALL scenario generation is controlled through:
@@ -109,7 +125,7 @@ Automatic scenario generation is disabled by default to prevent accidental API c
 
 ## Scheduler On Sleeping Hosts
 
-The application checks all due market simulation, scenario automation, and dividend jobs once per minute while the process is awake. For a Render service that can sleep, configure a long random `SCHEDULER_SECRET` in the deployment environment and call the following endpoint from an external cron service every five minutes:
+The application checks active price movements every ten seconds and slower market simulation, scenario automation, and dividend jobs once per minute while the process is awake. For a Render service that can sleep, configure a long random `SCHEDULER_SECRET` in the deployment environment and call the following endpoint from an external cron service every minute:
 
 ```text
 POST /internal/scheduler/tick

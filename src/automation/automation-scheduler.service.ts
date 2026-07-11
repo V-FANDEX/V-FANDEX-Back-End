@@ -6,6 +6,7 @@ import {
 } from "@nestjs/common";
 import { DividendsService } from "../dividends/dividends.service";
 import { MarketSimulationService } from "../market-simulation/market-simulation.service";
+import { PriceMovementsService } from "../price-movements/price-movements.service";
 import { ScenarioAutomationService } from "../scenario-automation/scenario-automation.service";
 
 type AutomationSource = "INTERNAL" | "EXTERNAL";
@@ -17,17 +18,19 @@ export class AutomationSchedulerService
   private readonly logger = new Logger(AutomationSchedulerService.name);
   private scheduler?: NodeJS.Timeout;
   private isRunning = false;
+  private lastSlowTickAt?: Date;
 
   constructor(
     private readonly dividendsService: DividendsService,
     private readonly marketSimulationService: MarketSimulationService,
+    private readonly priceMovementsService: PriceMovementsService,
     private readonly scenarioAutomationService: ScenarioAutomationService,
   ) {}
 
   onModuleInit() {
     this.scheduler = setInterval(() => {
       void this.tick("INTERNAL");
-    }, 60_000);
+    }, 10_000);
     void this.tick("INTERNAL");
   }
 
@@ -53,21 +56,30 @@ export class AutomationSchedulerService
     this.isRunning = true;
     try {
       const tasks = [];
-      tasks.push(
-        await this.runTask("marketSimulation", () =>
-          this.marketSimulationService.runSimulation(),
-        ),
-      );
-      tasks.push(
-        await this.runTask("scenarioAutomation", () =>
-          this.scenarioAutomationService.processDueScenarios(),
-        ),
-      );
-      tasks.push(
-        await this.runTask("dividendPayout", () =>
-          this.dividendsService.processScheduledDividends(),
-        ),
-      );
+      tasks.push(await this.runTask("priceMovement", () => this.priceMovementsService.processScheduledMovements()));
+
+      const runSlowTasks =
+        source === "EXTERNAL" ||
+        !this.lastSlowTickAt ||
+        startedAt.getTime() - this.lastSlowTickAt.getTime() >= 60_000;
+      if (runSlowTasks) {
+        this.lastSlowTickAt = startedAt;
+        tasks.push(
+          await this.runTask("marketSimulation", () =>
+            this.marketSimulationService.runSimulation(),
+          ),
+        );
+        tasks.push(
+          await this.runTask("scenarioAutomation", () =>
+            this.scenarioAutomationService.processDueScenarios(),
+          ),
+        );
+        tasks.push(
+          await this.runTask("dividendPayout", () =>
+            this.dividendsService.processScheduledDividends(),
+          ),
+        );
+      }
 
       return {
         ok: tasks.every((task) => task.status !== "FAILED"),

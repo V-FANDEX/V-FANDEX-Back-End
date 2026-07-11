@@ -3,8 +3,10 @@ import { ApiBearerAuth, ApiOkResponse, ApiTags } from "@nestjs/swagger";
 import { Role } from "@prisma/client";
 import {
   MarketSimulationRunResponseDto,
-  MarketSimulationSettingResponseDto
+  MarketSimulationSettingResponseDto,
+  PriceMovementTickResponseDto
 } from "../common/dto/api-models.dto";
+import { PriceMovementsService } from "../price-movements/price-movements.service";
 import { Roles } from "../common/decorators/roles.decorator";
 import { JwtAuthGuard } from "../common/guards/jwt-auth.guard";
 import { RolesGuard } from "../common/guards/roles.guard";
@@ -17,7 +19,10 @@ import { MarketSimulationService } from "./market-simulation.service";
 @ApiTags("Market Simulation")
 @ApiBearerAuth()
 export class MarketSimulationController {
-  constructor(private readonly marketSimulationService: MarketSimulationService) {}
+  constructor(
+    private readonly marketSimulationService: MarketSimulationService,
+    private readonly priceMovementsService: PriceMovementsService
+  ) {}
 
   @Get("settings")
   @ApiOkResponse({ type: MarketSimulationSettingResponseDto })
@@ -35,5 +40,11 @@ export class MarketSimulationController {
   @ApiOkResponse({ type: MarketSimulationRunResponseDto })
   runNow() {
     return this.marketSimulationService.runSimulation({ force: true });
+  }
+
+  @Post("price-tick")
+  @ApiOkResponse({ type: PriceMovementTickResponseDto })
+  runPriceTick() {
+    return this.priceMovementsService.processScheduledMovements(true);
   }
 }

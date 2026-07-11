@@ -21,6 +21,7 @@ import { MarketSimulationController } from "./market-simulation/market-simulatio
 import { MarketSimulationService } from "./market-simulation/market-simulation.service";
 import { PortfolioController } from "./portfolio/portfolio.controller";
 import { PortfolioService } from "./portfolio/portfolio.service";
+import { PriceMovementsService } from "./price-movements/price-movements.service";
 import { PrismaService } from "./prisma/prisma.service";
 import { RankingsController } from "./rankings/rankings.controller";
 import { RankingsService } from "./rankings/rankings.service";
@@ -79,6 +80,7 @@ import { WatchlistService } from "./watchlist/watchlist.service";
     MarketsService,
     MarketSimulationService,
     PortfolioService,
+    PriceMovementsService,
     PrismaService,
     RankingsService,
     ScenarioAutomationService,

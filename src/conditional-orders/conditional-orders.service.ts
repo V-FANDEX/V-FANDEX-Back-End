@@ -98,7 +98,8 @@ export class ConditionalOrdersService {
           stockId: order.stockId,
           type: order.type,
           quantity: order.quantity,
-          orderType: OrderType.CONDITION
+          orderType: OrderType.CONDITION,
+          executionPrice: currentPrice
         });
         await tx.conditionalOrder.update({
           where: { id: order.id },

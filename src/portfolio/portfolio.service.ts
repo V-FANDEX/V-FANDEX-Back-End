@@ -1,4 +1,6 @@
 import { Injectable, NotFoundException } from "@nestjs/common";
+import { money, zero } from "../common/utils/decimal";
+import { withLivePrice } from "../price-movements/price-movement.utils";
 import { PrismaService } from "../prisma/prisma.service";
 import { RankingsService } from "../rankings/rankings.service";
 
@@ -32,6 +34,20 @@ export class PortfolioService {
       throw new NotFoundException("User not found.");
     }
 
-    return user;
+    const priceAsOf = new Date();
+    const holdings = user.holdings.map((holding) => ({
+      ...holding,
+      stock: withLivePrice(holding.stock, priceAsOf)
+    }));
+    const holdingValue = holdings.reduce(
+      (sum, holding) => sum.plus(holding.stock.currentPrice.mul(holding.quantity)),
+      zero()
+    );
+
+    return {
+      ...user,
+      totalAssetValue: money(user.cash.plus(holdingValue)),
+      holdings
+    };
   }
 }

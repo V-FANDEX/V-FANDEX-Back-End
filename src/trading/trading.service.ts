@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
 import { OrderType, Prisma, SeasonStatus, TradeType } from "@prisma/client";
 import { money, zero } from "../common/utils/decimal";
+import { resolveMovementPrice } from "../price-movements/price-movement.utils";
 import { PrismaService } from "../prisma/prisma.service";
 import { RankingsService } from "../rankings/rankings.service";
 import { TradeRequestDto } from "./dto/trade-request.dto";
@@ -13,6 +14,7 @@ interface ExecuteTradeInput {
   type: TradeType;
   quantity: number;
   orderType?: OrderType;
+  executionPrice?: Prisma.Decimal;
 }
 
 @Injectable()
@@ -82,7 +84,7 @@ export class TradingService {
       throw new BadRequestException("Stock is not tradable.");
     }
 
-    const price = money(stock.currentPrice);
+    const price = money(input.executionPrice ?? resolveMovementPrice(stock, new Date()));
     if (price.lessThanOrEqualTo(0)) {
       throw new BadRequestException("Stock price must be positive.");
     }

@@ -22,7 +22,7 @@ import { zodTextFormat } from "openai/helpers/zod";
 import { z } from "zod";
 import { AiAccountsService } from "../ai-accounts/ai-accounts.service";
 import { money, rate } from "../common/utils/decimal";
-import { ConditionalOrdersService } from "../conditional-orders/conditional-orders.service";
+import { PriceMovementsService } from "../price-movements/price-movements.service";
 import { PrismaService } from "../prisma/prisma.service";
 import { RankingsService } from "../rankings/rankings.service";
 import { GenerateScenarioDto } from "./dto/generate-scenario.dto";
@@ -44,8 +44,12 @@ export interface ScenarioAffectedStockResult {
   stockName: string;
   beforePrice: Prisma.Decimal;
   afterPrice: Prisma.Decimal;
+  targetPrice: Prisma.Decimal;
   appliedRate: Prisma.Decimal;
   impactReason: string;
+  movementStartedAt: Date;
+  movementEndsAt: Date;
+  movementDurationMinutes: number;
 }
 
 export interface ConditionalOrderExecutionResult {
@@ -66,7 +70,7 @@ export class ScenariosService {
   constructor(
     private readonly aiAccountsService: AiAccountsService,
     private readonly config: ConfigService,
-    private readonly conditionalOrdersService: ConditionalOrdersService,
+    private readonly priceMovementsService: PriceMovementsService,
     private readonly prisma: PrismaService,
     private readonly rankingsService: RankingsService,
   ) {}
@@ -172,6 +176,8 @@ export class ScenariosService {
 
     const affectedStocks: ScenarioAffectedStockResult[] = [];
     const conditionalOrderResults: ConditionalOrderExecutionResult[] = [];
+    const movementSettings = await this.priceMovementsService.getSettings();
+    const appliedAt = new Date();
 
     await this.prisma.$transaction(async (tx) => {
       for (const stock of targetStocks) {
@@ -181,58 +187,50 @@ export class ScenariosService {
           scenario.impactLevel,
           stock,
         );
-        const oldPrice = money(stock.currentPrice);
+        const oldPrice = this.priceMovementsService.resolveCurrentPrice(stock, appliedAt);
         const multiplier = new Prisma.Decimal(1).plus(changeRate.div(100));
-        const newPrice = money(Prisma.Decimal.max(oldPrice.mul(multiplier), 1));
-
-        await tx.stock.update({
-          where: { id: stock.id },
-          data: {
-            previousPrice: oldPrice,
-            currentPrice: newPrice,
+        const targetPrice = money(Prisma.Decimal.max(oldPrice.mul(multiplier), 1));
+        const impactReason = `${scenario.type}_${scenario.sentiment}_IMPACT`;
+        const movement = await this.priceMovementsService.scheduleTargetInTx(
+          tx,
+          stock,
+          targetPrice,
+          movementSettings,
+          {
+            reason: `SCENARIO_${scenario.id}:${impactReason}`,
+            durationMultiplier: this.movementDurationMultiplier(scenario.type),
+            now: appliedAt,
           },
-        });
+        );
 
         await tx.scenarioImpact.create({
           data: {
             scenarioId: scenario.id,
             stockId: stock.id,
             oldPrice,
-            newPrice,
+            newPrice: targetPrice,
             changeRate,
-            impactReason: `${scenario.type}_${scenario.sentiment}_IMPACT`,
+            impactReason,
           },
         });
-
-        await tx.priceHistory.create({
-          data: {
-            stockId: stock.id,
-            price: newPrice,
-            changeRate,
-            reason: `SCENARIO:${scenario.id}`,
-          },
-        });
-
-        const orderResult =
-          await this.conditionalOrdersService.processForStockInTx(
-            tx,
-            stock.id,
-            newPrice,
-          );
-        conditionalOrderResults.push(...orderResult.results);
+        conditionalOrderResults.push(...movement.conditionalOrderResults);
         affectedStocks.push({
           stockId: stock.id,
           stockName: stock.name,
-          beforePrice: oldPrice,
-          afterPrice: newPrice,
+          beforePrice: movement.currentPrice,
+          afterPrice: targetPrice,
+          targetPrice,
           appliedRate: changeRate,
-          impactReason: `${scenario.type}_${scenario.sentiment}_IMPACT`,
+          impactReason,
+          movementStartedAt: movement.movementStartedAt,
+          movementEndsAt: movement.movementEndsAt,
+          movementDurationMinutes: movement.movementDurationMinutes,
         });
       }
 
       await tx.scenario.update({
         where: { id: scenario.id },
-        data: { appliedAt: new Date() },
+        data: { appliedAt },
       });
     });
 
@@ -514,5 +512,15 @@ export class ScenariosService {
       return { min: "-20", max: "20" };
     }
     return { min: "-8", max: "8" };
+  }
+
+  private movementDurationMultiplier(type: ScenarioType) {
+    if (type === ScenarioType.BIG) {
+      return 3;
+    }
+    if (type === ScenarioType.MAIN) {
+      return 2;
+    }
+    return 1;
   }
 }

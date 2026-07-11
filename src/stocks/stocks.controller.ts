@@ -8,7 +8,12 @@ import {
   getSchemaPath
 } from "@nestjs/swagger";
 import { Role } from "@prisma/client";
-import { ChartBucketResponseDto, PriceHistoryResponseDto, StockResponseDto } from "../common/dto/api-models.dto";
+import {
+  ChartBucketResponseDto,
+  PriceHistoryResponseDto,
+  StockQuoteResponseDto,
+  StockResponseDto
+} from "../common/dto/api-models.dto";
 import { Roles } from "../common/decorators/roles.decorator";
 import { JwtAuthGuard } from "../common/guards/jwt-auth.guard";
 import { RolesGuard } from "../common/guards/roles.guard";
@@ -31,6 +36,12 @@ export class StocksController {
     @Query("search") search?: string
   ) {
     return this.stocksService.list({ marketId, includeUnlisted: includeUnlisted === "true", search });
+  }
+
+  @Get("stocks/quotes")
+  @ApiOkResponse({ type: StockQuoteResponseDto, isArray: true })
+  quotes(@Query("marketId") marketId?: string) {
+    return this.stocksService.quotes(marketId);
   }
 
   @Get("stocks/:id")
