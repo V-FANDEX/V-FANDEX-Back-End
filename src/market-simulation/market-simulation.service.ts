@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, Logger, OnModuleDestroy, OnModuleInit } from "@nestjs/common";
+import { BadRequestException, Injectable, Logger } from "@nestjs/common";
 import { Prisma } from "@prisma/client";
 import { money, rate } from "../common/utils/decimal";
 import { ConditionalOrderExecutionResult } from "../scenarios/scenarios.service";
@@ -6,8 +6,6 @@ import { ConditionalOrdersService } from "../conditional-orders/conditional-orde
 import { PrismaService } from "../prisma/prisma.service";
 import { RankingsService } from "../rankings/rankings.service";
 import { UpdateMarketSimulationSettingsDto } from "./dto/update-market-simulation-settings.dto";
-
-type Tx = Prisma.TransactionClient;
 
 interface RunSimulationOptions {
   force?: boolean;
@@ -24,35 +22,21 @@ export interface SimulatedStockResult {
 }
 
 @Injectable()
-export class MarketSimulationService implements OnModuleInit, OnModuleDestroy {
+export class MarketSimulationService {
   private readonly logger = new Logger(MarketSimulationService.name);
-  private scheduler?: NodeJS.Timeout;
   private isRunning = false;
 
   constructor(
     private readonly conditionalOrdersService: ConditionalOrdersService,
     private readonly prisma: PrismaService,
-    private readonly rankingsService: RankingsService
+    private readonly rankingsService: RankingsService,
   ) {}
-
-  onModuleInit() {
-    this.scheduler = setInterval(() => {
-      void this.runScheduledSimulation();
-    }, 60_000);
-    void this.runScheduledSimulation();
-  }
-
-  onModuleDestroy() {
-    if (this.scheduler) {
-      clearInterval(this.scheduler);
-    }
-  }
 
   getSettings() {
     return this.prisma.marketSimulationSetting.upsert({
       where: { id: "default" },
       create: {},
-      update: {}
+      update: {},
     });
   }
 
@@ -66,27 +50,57 @@ export class MarketSimulationService implements OnModuleInit, OnModuleDestroy {
       create: {
         isEnabled: dto.isEnabled,
         intervalMinutes: dto.intervalMinutes,
-        minChangeRate: dto.minChangeRate === undefined ? undefined : rate(dto.minChangeRate),
-        maxChangeRate: dto.maxChangeRate === undefined ? undefined : rate(dto.maxChangeRate),
-        extremeMinRate: dto.extremeMinRate === undefined ? undefined : rate(dto.extremeMinRate),
-        extremeMaxRate: dto.extremeMaxRate === undefined ? undefined : rate(dto.extremeMaxRate),
-        extremeChance: dto.extremeChance === undefined ? undefined : rate(dto.extremeChance),
-        volatilityWeight: dto.volatilityWeight === undefined ? undefined : rate(dto.volatilityWeight),
+        randomIntervalEnabled: dto.randomIntervalEnabled,
+        minIntervalMinutes: dto.minIntervalMinutes,
+        maxIntervalMinutes: dto.maxIntervalMinutes,
+        minChangeRate:
+          dto.minChangeRate === undefined ? undefined : rate(dto.minChangeRate),
+        maxChangeRate:
+          dto.maxChangeRate === undefined ? undefined : rate(dto.maxChangeRate),
+        extremeMinRate:
+          dto.extremeMinRate === undefined
+            ? undefined
+            : rate(dto.extremeMinRate),
+        extremeMaxRate:
+          dto.extremeMaxRate === undefined
+            ? undefined
+            : rate(dto.extremeMaxRate),
+        extremeChance:
+          dto.extremeChance === undefined ? undefined : rate(dto.extremeChance),
+        volatilityWeight:
+          dto.volatilityWeight === undefined
+            ? undefined
+            : rate(dto.volatilityWeight),
         targetStockCount: dto.targetStockCount,
-        nextRunAt
+        nextRunAt,
       },
       update: {
         isEnabled: dto.isEnabled,
         intervalMinutes: dto.intervalMinutes,
-        minChangeRate: dto.minChangeRate === undefined ? undefined : rate(dto.minChangeRate),
-        maxChangeRate: dto.maxChangeRate === undefined ? undefined : rate(dto.maxChangeRate),
-        extremeMinRate: dto.extremeMinRate === undefined ? undefined : rate(dto.extremeMinRate),
-        extremeMaxRate: dto.extremeMaxRate === undefined ? undefined : rate(dto.extremeMaxRate),
-        extremeChance: dto.extremeChance === undefined ? undefined : rate(dto.extremeChance),
-        volatilityWeight: dto.volatilityWeight === undefined ? undefined : rate(dto.volatilityWeight),
+        randomIntervalEnabled: dto.randomIntervalEnabled,
+        minIntervalMinutes: dto.minIntervalMinutes,
+        maxIntervalMinutes: dto.maxIntervalMinutes,
+        minChangeRate:
+          dto.minChangeRate === undefined ? undefined : rate(dto.minChangeRate),
+        maxChangeRate:
+          dto.maxChangeRate === undefined ? undefined : rate(dto.maxChangeRate),
+        extremeMinRate:
+          dto.extremeMinRate === undefined
+            ? undefined
+            : rate(dto.extremeMinRate),
+        extremeMaxRate:
+          dto.extremeMaxRate === undefined
+            ? undefined
+            : rate(dto.extremeMaxRate),
+        extremeChance:
+          dto.extremeChance === undefined ? undefined : rate(dto.extremeChance),
+        volatilityWeight:
+          dto.volatilityWeight === undefined
+            ? undefined
+            : rate(dto.volatilityWeight),
         targetStockCount: dto.targetStockCount,
-        nextRunAt
-      }
+        nextRunAt,
+      },
     });
   }
 
@@ -109,10 +123,10 @@ export class MarketSimulationService implements OnModuleInit, OnModuleDestroy {
     try {
       const stocks = await this.pickTargetStocks(settings.targetStockCount);
       if (!stocks.length) {
-        const nextRunAt = this.nextRunDate(settings.intervalMinutes);
+        const schedule = this.nextRunSchedule(settings);
         await this.prisma.marketSimulationSetting.update({
           where: { id: "default" },
-          data: { lastRunAt: now, nextRunAt }
+          data: { lastRunAt: now, nextRunAt: schedule.nextRunAt },
         });
 
         return {
@@ -121,7 +135,7 @@ export class MarketSimulationService implements OnModuleInit, OnModuleDestroy {
           affectedCount: 0,
           affectedStocks: [],
           conditionalOrderResults: [],
-          nextRunAt
+          ...schedule,
         };
       }
 
@@ -133,15 +147,19 @@ export class MarketSimulationService implements OnModuleInit, OnModuleDestroy {
           for (const stock of stocks) {
             const simulation = this.calculateStockMove(stock, settings);
             const oldPrice = money(stock.currentPrice);
-            const multiplier = new Prisma.Decimal(1).plus(simulation.changeRate.div(100));
-            const newPrice = money(Prisma.Decimal.max(oldPrice.mul(multiplier), 1));
+            const multiplier = new Prisma.Decimal(1).plus(
+              simulation.changeRate.div(100),
+            );
+            const newPrice = money(
+              Prisma.Decimal.max(oldPrice.mul(multiplier), 1),
+            );
 
             await tx.stock.update({
               where: { id: stock.id },
               data: {
                 previousPrice: oldPrice,
-                currentPrice: newPrice
-              }
+                currentPrice: newPrice,
+              },
             });
 
             await tx.priceHistory.create({
@@ -149,11 +167,16 @@ export class MarketSimulationService implements OnModuleInit, OnModuleDestroy {
                 stockId: stock.id,
                 price: newPrice,
                 changeRate: simulation.changeRate,
-                reason: `SIMULATION:${simulation.mode}`
-              }
+                reason: `SIMULATION:${simulation.mode}`,
+              },
             });
 
-            const orderResult = await this.conditionalOrdersService.processForStockInTx(tx, stock.id, newPrice);
+            const orderResult =
+              await this.conditionalOrdersService.processForStockInTx(
+                tx,
+                stock.id,
+                newPrice,
+              );
             conditionalOrderResults.push(...orderResult.results);
             affectedStocks.push({
               stockId: stock.id,
@@ -162,26 +185,26 @@ export class MarketSimulationService implements OnModuleInit, OnModuleDestroy {
               afterPrice: newPrice,
               appliedRate: simulation.changeRate,
               mode: simulation.mode,
-              reason: `SIMULATION_${simulation.mode}`
+              reason: `SIMULATION_${simulation.mode}`,
             });
           }
         },
         {
           maxWait: 10_000,
-          timeout: 60_000
-        }
+          timeout: 60_000,
+        },
       );
 
       await this.rankingsService.recalculateAll();
 
       const completedAt = new Date();
-      const nextRunAt = this.nextRunDate(settings.intervalMinutes, completedAt);
+      const schedule = this.nextRunSchedule(settings, completedAt);
       await this.prisma.marketSimulationSetting.update({
         where: { id: "default" },
         data: {
           lastRunAt: completedAt,
-          nextRunAt
-        }
+          nextRunAt: schedule.nextRunAt,
+        },
       });
 
       return {
@@ -190,10 +213,12 @@ export class MarketSimulationService implements OnModuleInit, OnModuleDestroy {
         affectedCount: affectedStocks.length,
         affectedStocks,
         conditionalOrderResults,
-        nextRunAt
+        ...schedule,
       };
     } catch (error) {
-      this.logger.error(error instanceof Error ? error.message : "Market simulation failed.");
+      this.logger.error(
+        error instanceof Error ? error.message : "Market simulation failed.",
+      );
       throw error;
     } finally {
       this.isRunning = false;
@@ -205,9 +230,9 @@ export class MarketSimulationService implements OnModuleInit, OnModuleDestroy {
       where: {
         isListed: true,
         isTradingSuspended: false,
-        currentPrice: { gt: 0 }
+        currentPrice: { gt: 0 },
       },
-      orderBy: { updatedAt: "asc" }
+      orderBy: { updatedAt: "asc" },
     });
 
     if (!targetStockCount || targetStockCount >= stocks.length) {
@@ -226,42 +251,64 @@ export class MarketSimulationService implements OnModuleInit, OnModuleDestroy {
       extremeMaxRate: Prisma.Decimal;
       extremeChance: Prisma.Decimal;
       volatilityWeight: Prisma.Decimal;
-    }
+    },
   ) {
     const isExtreme = Math.random() < settings.extremeChance.toNumber();
-    const min = isExtreme ? settings.extremeMinRate.toNumber() : settings.minChangeRate.toNumber();
-    const max = isExtreme ? settings.extremeMaxRate.toNumber() : settings.maxChangeRate.toNumber();
+    const min = isExtreme
+      ? settings.extremeMinRate.toNumber()
+      : settings.minChangeRate.toNumber();
+    const max = isExtreme
+      ? settings.extremeMaxRate.toNumber()
+      : settings.maxChangeRate.toNumber();
     const base = min + Math.random() * (max - min);
-    const volatilityFactor = 1 + ((stock.volatilityLevel - 5) / 10) * settings.volatilityWeight.toNumber();
+    const volatilityFactor =
+      1 +
+      ((stock.volatilityLevel - 5) / 10) * settings.volatilityWeight.toNumber();
     const adjusted = Math.max(-95, base * Math.max(0.05, volatilityFactor));
 
     return {
       mode: isExtreme ? ("EXTREME" as const) : ("NORMAL" as const),
-      changeRate: rate(adjusted)
+      changeRate: rate(adjusted),
     };
   }
 
   private assertValidRanges(
     dto: UpdateMarketSimulationSettingsDto,
-    current: Awaited<ReturnType<MarketSimulationService["getSettings"]>>
+    current: Awaited<ReturnType<MarketSimulationService["getSettings"]>>,
   ) {
     const minChangeRate = dto.minChangeRate ?? current.minChangeRate.toNumber();
     const maxChangeRate = dto.maxChangeRate ?? current.maxChangeRate.toNumber();
-    const extremeMinRate = dto.extremeMinRate ?? current.extremeMinRate.toNumber();
-    const extremeMaxRate = dto.extremeMaxRate ?? current.extremeMaxRate.toNumber();
+    const extremeMinRate =
+      dto.extremeMinRate ?? current.extremeMinRate.toNumber();
+    const extremeMaxRate =
+      dto.extremeMaxRate ?? current.extremeMaxRate.toNumber();
+    const minIntervalMinutes =
+      dto.minIntervalMinutes ?? current.minIntervalMinutes;
+    const maxIntervalMinutes =
+      dto.maxIntervalMinutes ?? current.maxIntervalMinutes;
 
     if (minChangeRate > maxChangeRate) {
-      throw new BadRequestException("minChangeRate cannot be greater than maxChangeRate.");
+      throw new BadRequestException(
+        "minChangeRate cannot be greater than maxChangeRate.",
+      );
     }
 
     if (extremeMinRate > extremeMaxRate) {
-      throw new BadRequestException("extremeMinRate cannot be greater than extremeMaxRate.");
+      throw new BadRequestException(
+        "extremeMinRate cannot be greater than extremeMaxRate.",
+      );
+    }
+
+    if (minIntervalMinutes > maxIntervalMinutes) {
+      throw new BadRequestException(
+        "minIntervalMinutes cannot be greater than maxIntervalMinutes.",
+      );
     }
   }
 
   private resolveNextRunAt(
     dto: UpdateMarketSimulationSettingsDto,
-    current: Awaited<ReturnType<MarketSimulationService["getSettings"]>>
+    current: Awaited<ReturnType<MarketSimulationService["getSettings"]>>,
   ) {
     if (dto.nextRunAt) {
       return new Date(dto.nextRunAt);
@@ -271,16 +318,59 @@ export class MarketSimulationService implements OnModuleInit, OnModuleDestroy {
       return new Date();
     }
 
-    if (dto.intervalMinutes !== undefined && current.nextRunAt) {
+    if ((dto.isEnabled ?? current.isEnabled) && !current.nextRunAt) {
+      return new Date();
+    }
+
+    const scheduleChanged =
+      dto.intervalMinutes !== undefined ||
+      dto.randomIntervalEnabled !== undefined ||
+      dto.minIntervalMinutes !== undefined ||
+      dto.maxIntervalMinutes !== undefined;
+
+    if (scheduleChanged && current.nextRunAt) {
       const lastRunAt = current.lastRunAt ?? new Date();
-      return this.nextRunDate(dto.intervalMinutes, lastRunAt);
+      return this.nextRunSchedule(
+        {
+          intervalMinutes: dto.intervalMinutes ?? current.intervalMinutes,
+          randomIntervalEnabled:
+            dto.randomIntervalEnabled ?? current.randomIntervalEnabled,
+          minIntervalMinutes:
+            dto.minIntervalMinutes ?? current.minIntervalMinutes,
+          maxIntervalMinutes:
+            dto.maxIntervalMinutes ?? current.maxIntervalMinutes,
+        },
+        lastRunAt,
+      ).nextRunAt;
     }
 
     return undefined;
   }
 
-  private nextRunDate(intervalMinutes: number, from = new Date()) {
-    return new Date(from.getTime() + intervalMinutes * 60_000);
+  private nextRunSchedule(
+    settings: {
+      intervalMinutes: number;
+      randomIntervalEnabled: boolean;
+      minIntervalMinutes: number;
+      maxIntervalMinutes: number;
+    },
+    from = new Date(),
+  ) {
+    const scheduledIntervalMinutes = settings.randomIntervalEnabled
+      ? this.randomInteger(
+          settings.minIntervalMinutes,
+          settings.maxIntervalMinutes,
+        )
+      : settings.intervalMinutes;
+
+    return {
+      nextRunAt: new Date(from.getTime() + scheduledIntervalMinutes * 60_000),
+      scheduledIntervalMinutes,
+    };
+  }
+
+  private randomInteger(min: number, max: number) {
+    return Math.floor(Math.random() * (max - min + 1)) + min;
   }
 
   private shuffle<T>(items: T[]) {
@@ -290,13 +380,5 @@ export class MarketSimulationService implements OnModuleInit, OnModuleDestroy {
       [next[index], next[swapIndex]] = [next[swapIndex], next[index]];
     }
     return next;
-  }
-
-  private async runScheduledSimulation() {
-    try {
-      await this.runSimulation();
-    } catch (error) {
-      this.logger.error(error instanceof Error ? error.message : "Scheduled market simulation failed.");
-    }
   }
 }

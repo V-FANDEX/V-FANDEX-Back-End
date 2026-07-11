@@ -89,7 +89,36 @@ POST /admin/market-simulation/run
 
 Normal moves use `minChangeRate` and `maxChangeRate`. Occasional high-risk moves use `extremeMinRate`, `extremeMaxRate`, and `extremeChance`; the default extreme range is `-80%` to `+300%`. Downside moves are clamped so prices never become negative. Each run writes price history, checks conditional orders, and recalculates rankings.
 
-On free hosts that sleep, scheduled runs only happen while the server is awake. Use `POST /admin/market-simulation/run` or an external cron/ping service if stricter timing is needed.
+Set `randomIntervalEnabled=true`, `minIntervalMinutes=5`, and `maxIntervalMinutes=15` to schedule each price update at a new random interval between 5 and 15 minutes. Set `randomIntervalEnabled=false` to use the fixed `intervalMinutes` value instead. The scheduler remains inactive until `isEnabled=true` is saved.
+
+## Automatic GPT Scenarios
+
+Automatic MAIN and SMALL scenario generation is controlled through:
+
+```text
+GET /admin/scenario-automation/settings
+PATCH /admin/scenario-automation/settings
+POST /admin/scenario-automation/run-main
+POST /admin/scenario-automation/run-small
+POST /admin/scenario-automation/run-due
+```
+
+The defaults schedule MAIN scenarios every 12 to 24 hours with a maximum of two per UTC day, and SMALL scenarios every 120 to 240 minutes with a maximum of twelve per UTC day. `autoApply=true` immediately applies generated price impacts, checks conditional orders, recalculates rankings, and lets active AI accounts react. Failed GPT generations are retried after `retryDelayMinutes`. Database leases prevent duplicate GPT calls when scheduler ticks overlap.
+
+Automatic scenario generation is disabled by default to prevent accidental API charges. Enable `isEnabled`, then keep `mainEnabled` and/or `smallEnabled` active through the admin settings endpoint.
+
+## Scheduler On Sleeping Hosts
+
+The application checks all due market simulation, scenario automation, and dividend jobs once per minute while the process is awake. For a Render service that can sleep, configure a long random `SCHEDULER_SECRET` in the deployment environment and call the following endpoint from an external cron service every five minutes:
+
+```text
+POST /internal/scheduler/tick
+x-scheduler-secret: <SCHEDULER_SECRET>
+```
+
+The endpoint is idempotent for overlapping calls: an already running tick is skipped, and scenario jobs additionally use a database lease. Do not expose the scheduler secret in frontend code.
+
+Without an external wake-up call, scheduled runs only happen while the server is awake.
 
 ## AI Account Behavior
 

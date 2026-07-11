@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException } from "@nestjs/common";
-import { Prisma, Role, SeasonStatus } from "@prisma/client";
+import { Role, SeasonStatus } from "@prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
 import { money, rate, zero } from "../common/utils/decimal";
 

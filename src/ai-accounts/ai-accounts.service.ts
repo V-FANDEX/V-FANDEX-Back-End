@@ -1,6 +1,17 @@
-import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
-import { AiStrategyType, OrderType, Prisma, Role, ScenarioSentiment, TradeType } from "@prisma/client";
+import {
+  AiStrategyType,
+  OrderType,
+  Prisma,
+  Role,
+  ScenarioSentiment,
+  TradeType,
+} from "@prisma/client";
 import { money } from "../common/utils/decimal";
 import { PrismaService } from "../prisma/prisma.service";
 import { TradingService } from "../trading/trading.service";
@@ -40,34 +51,48 @@ interface AiTradeDecision {
   reason: string;
 }
 
+const aiAccountUserSelect = {
+  id: true,
+  email: true,
+  nickname: true,
+  role: true,
+  cash: true,
+  initialCash: true,
+  totalAssetValue: true,
+  isActive: true,
+  createdAt: true,
+  updatedAt: true,
+} satisfies Prisma.UserSelect;
+
+type AiAccountWithUser = Prisma.AiAccountGetPayload<{
+  include: { user: { select: typeof aiAccountUserSelect } };
+}>;
+
 @Injectable()
 export class AiAccountsService {
   constructor(
     private readonly config: ConfigService,
     private readonly prisma: PrismaService,
-    private readonly tradingService: TradingService
+    private readonly tradingService: TradingService,
   ) {}
 
   async list() {
     const accounts = await this.prisma.aiAccount.findMany({
-      include: { user: true },
-      orderBy: { createdAt: "desc" }
+      include: { user: { select: aiAccountUserSelect } },
+      orderBy: { createdAt: "desc" },
     });
 
-    return accounts.map((account) => ({
-      ...account,
-      nickname: account.user.nickname,
-      cash: account.user.cash,
-      totalAssetValue: account.user.totalAssetValue,
-      status: account.isActive && account.user.isActive ? "ACTIVE" : "INACTIVE"
-    }));
+    return accounts.map((account) => this.toResponse(account));
   }
 
   async create(dto: CreateAiAccountDto) {
-    const initialCash = money(dto.initialCash ?? Number(this.config.get<string>("DEFAULT_INITIAL_CASH") ?? 1000000));
+    const initialCash = money(
+      dto.initialCash ??
+        Number(this.config.get<string>("DEFAULT_INITIAL_CASH") ?? 1000000),
+    );
 
     try {
-      return await this.prisma.user.create({
+      const user = await this.prisma.user.create({
         data: {
           email: null,
           passwordHash: null,
@@ -81,20 +106,35 @@ export class AiAccountsService {
               strategyType: dto.strategyType,
               preferredMarketIds: dto.preferredMarketIds ?? [],
               riskLevel: dto.riskLevel,
-              isActive: true
-            }
-          }
+              isActive: true,
+            },
+          },
         },
-        include: { aiAccount: true }
+        select: {
+          ...aiAccountUserSelect,
+          aiAccount: true,
+        },
       });
-    } catch {
-      throw new BadRequestException("Failed to create AI account.");
+      if (!user.aiAccount) {
+        throw new BadRequestException("Failed to load the created AI account.");
+      }
+
+      const { aiAccount, ...accountUser } = user;
+      return this.toResponse({ ...aiAccount, user: accountUser });
+    } catch (error) {
+      if (error instanceof BadRequestException) {
+        throw error;
+      }
+      if (error instanceof Prisma.PrismaClientKnownRequestError) {
+        throw new BadRequestException("Failed to create AI account.");
+      }
+      throw error;
     }
   }
 
   async update(id: string, dto: UpdateAiAccountDto) {
-    const aiAccount = await this.ensureExists(id);
-    return this.prisma.aiAccount.update({
+    await this.ensureExists(id);
+    const account = await this.prisma.aiAccount.update({
       where: { id },
       data: {
         strategyType: dto.strategyType,
@@ -103,26 +143,29 @@ export class AiAccountsService {
         user: dto.nickname
           ? {
               update: {
-                nickname: dto.nickname
-              }
+                nickname: dto.nickname,
+              },
             }
-          : undefined
+          : undefined,
       },
-      include: { user: true }
+      include: { user: { select: aiAccountUserSelect } },
     });
+    return this.toResponse(account);
   }
 
   async deactivate(id: string) {
-    const aiAccount = await this.ensureExists(id);
-    await this.prisma.user.update({
-      where: { id: aiAccount.userId },
-      data: { isActive: false }
-    });
-    return this.prisma.aiAccount.update({
+    await this.ensureExists(id);
+    const account = await this.prisma.aiAccount.update({
       where: { id },
-      data: { isActive: false },
-      include: { user: true }
+      data: {
+        isActive: false,
+        user: {
+          update: { isActive: false },
+        },
+      },
+      include: { user: { select: aiAccountUserSelect } },
     });
+    return this.toResponse(account);
   }
 
   async runTrade(id: string) {
@@ -133,11 +176,11 @@ export class AiAccountsService {
           include: {
             holdings: {
               where: { quantity: { gt: 0 } },
-              include: { stock: true }
-            }
-          }
-        }
-      }
+              include: { stock: true },
+            },
+          },
+        },
+      },
     });
 
     if (!aiAccount || !aiAccount.isActive || !aiAccount.user.isActive) {
@@ -146,14 +189,22 @@ export class AiAccountsService {
 
     const sellCandidate = this.pickSellCandidate(aiAccount.user.holdings);
     const buyCandidate = await this.pickBuyCandidate(aiAccount.strategyType);
-    const shouldSell = sellCandidate && (aiAccount.strategyType === AiStrategyType.STABLE || Math.random() < 0.35);
+    const shouldSell =
+      sellCandidate &&
+      (aiAccount.strategyType === AiStrategyType.STABLE ||
+        Math.random() < 0.35);
 
     if (shouldSell && sellCandidate) {
-      const quantity = Math.max(1, Math.floor(sellCandidate.quantity * Math.min(aiAccount.riskLevel / 10, 0.5)));
+      const quantity = Math.max(
+        1,
+        Math.floor(
+          sellCandidate.quantity * Math.min(aiAccount.riskLevel / 10, 0.5),
+        ),
+      );
       return this.tradingService.sell(aiAccount.userId, {
         stockId: sellCandidate.stockId,
         quantity,
-        orderType: OrderType.MARKET
+        orderType: OrderType.MARKET,
       });
     }
 
@@ -161,24 +212,30 @@ export class AiAccountsService {
       throw new BadRequestException("No tradable stock candidate found.");
     }
 
-    const maxSpend = aiAccount.user.cash.mul(aiAccount.riskLevel / 10).mul(0.25);
-    const quantity = Math.floor(maxSpend.div(buyCandidate.currentPrice).toNumber());
+    const maxSpend = aiAccount.user.cash
+      .mul(aiAccount.riskLevel / 10)
+      .mul(0.25);
+    const quantity = Math.floor(
+      maxSpend.div(buyCandidate.currentPrice).toNumber(),
+    );
     if (quantity < 1) {
       if (sellCandidate) {
         return this.tradingService.sell(aiAccount.userId, {
           stockId: sellCandidate.stockId,
           quantity: 1,
-          orderType: OrderType.MARKET
+          orderType: OrderType.MARKET,
         });
       }
 
-      throw new BadRequestException("AI account does not have enough cash to trade.");
+      throw new BadRequestException(
+        "AI account does not have enough cash to trade.",
+      );
     }
 
     return this.tradingService.buy(aiAccount.userId, {
       stockId: buyCandidate.id,
       quantity,
-      orderType: OrderType.MARKET
+      orderType: OrderType.MARKET,
     });
   }
 
@@ -188,9 +245,9 @@ export class AiAccountsService {
       include: {
         impacts: {
           include: { stock: true },
-          orderBy: { createdAt: "asc" }
-        }
-      }
+          orderBy: { createdAt: "asc" },
+        },
+      },
     });
 
     if (!scenario) {
@@ -201,7 +258,7 @@ export class AiAccountsService {
       return {
         scenarioId,
         aiAccountCount: 0,
-        results: []
+        results: [],
       };
     }
 
@@ -209,19 +266,19 @@ export class AiAccountsService {
       where: {
         isActive: true,
         user: {
-          isActive: true
-        }
+          isActive: true,
+        },
       },
       include: {
         user: {
           include: {
             holdings: {
               where: { quantity: { gt: 0 } },
-              include: { stock: true }
-            }
-          }
-        }
-      }
+              include: { stock: true },
+            },
+          },
+        },
+      },
     });
 
     const results = [];
@@ -233,7 +290,7 @@ export class AiAccountsService {
             aiAccountId: aiAccount.id,
             userId: aiAccount.userId,
             action: "SKIP",
-            reason: "No useful scenario trade signal."
+            reason: "No useful scenario trade signal.",
           });
           continue;
         }
@@ -243,12 +300,12 @@ export class AiAccountsService {
             ? await this.tradingService.buy(aiAccount.userId, {
                 stockId: decision.stockId,
                 quantity: decision.quantity,
-                orderType: OrderType.MARKET
+                orderType: OrderType.MARKET,
               })
             : await this.tradingService.sell(aiAccount.userId, {
                 stockId: decision.stockId,
                 quantity: decision.quantity,
-                orderType: OrderType.MARKET
+                orderType: OrderType.MARKET,
               });
 
         results.push({
@@ -258,14 +315,17 @@ export class AiAccountsService {
           stockId: trade.stockId,
           quantity: trade.quantity,
           tradeId: trade.id,
-          reason: decision.reason
+          reason: decision.reason,
         });
       } catch (error) {
         results.push({
           aiAccountId: aiAccount.id,
           userId: aiAccount.userId,
           action: "FAILED",
-          reason: error instanceof Error ? error.message : "AI scenario trade failed."
+          reason:
+            error instanceof Error
+              ? error.message
+              : "AI scenario trade failed.",
         });
       }
     }
@@ -273,14 +333,14 @@ export class AiAccountsService {
     return {
       scenarioId,
       aiAccountCount: aiAccounts.length,
-      results
+      results,
     };
   }
 
   private async pickBuyCandidate(strategy: AiStrategyType) {
     const where: Prisma.StockWhereInput = {
       isListed: true,
-      isTradingSuspended: false
+      isTradingSuspended: false,
     };
 
     const stocks = await this.prisma.stock.findMany({ where, take: 50 });
@@ -300,17 +360,24 @@ export class AiAccountsService {
 
   private decideScenarioTrade(
     aiAccount: AiAccountWithPortfolio,
-    scenario: ScenarioWithImpacts
+    scenario: ScenarioWithImpacts,
   ): AiTradeDecision | null {
     const negativeHolding = this.pickScenarioSellCandidate(aiAccount, scenario);
-    const positiveImpact = this.pickScenarioBuyCandidate(aiAccount.strategyType, scenario.impacts);
+    const positiveImpact = this.pickScenarioBuyCandidate(
+      aiAccount.strategyType,
+      scenario.impacts,
+    );
 
     if (scenario.sentiment === ScenarioSentiment.NEGATIVE) {
-      return negativeHolding ? this.buildSellDecision(aiAccount, scenario, negativeHolding) : null;
+      return negativeHolding
+        ? this.buildSellDecision(aiAccount, scenario, negativeHolding)
+        : null;
     }
 
     if (scenario.sentiment === ScenarioSentiment.POSITIVE) {
-      return positiveImpact ? this.buildBuyDecision(aiAccount, scenario, positiveImpact) : null;
+      return positiveImpact
+        ? this.buildBuyDecision(aiAccount, scenario, positiveImpact)
+        : null;
     }
 
     if (scenario.sentiment === ScenarioSentiment.MIXED) {
@@ -318,7 +385,9 @@ export class AiAccountsService {
         return this.buildSellDecision(aiAccount, scenario, negativeHolding);
       }
 
-      return positiveImpact ? this.buildBuyDecision(aiAccount, scenario, positiveImpact) : null;
+      return positiveImpact
+        ? this.buildBuyDecision(aiAccount, scenario, positiveImpact)
+        : null;
     }
 
     if (negativeHolding && Math.random() < 0.25) {
@@ -332,13 +401,16 @@ export class AiAccountsService {
     return null;
   }
 
-  private pickScenarioBuyCandidate(strategy: AiStrategyType, impacts: ScenarioImpactWithStock[]) {
+  private pickScenarioBuyCandidate(
+    strategy: AiStrategyType,
+    impacts: ScenarioImpactWithStock[],
+  ) {
     const candidates = impacts.filter(
       (impact) =>
         impact.changeRate.greaterThan(0) &&
         impact.stock.isListed &&
         !impact.stock.isTradingSuspended &&
-        impact.stock.currentPrice.greaterThan(0)
+        impact.stock.currentPrice.greaterThan(0),
     );
 
     if (!candidates.length) {
@@ -354,31 +426,41 @@ export class AiAccountsService {
 
     if (strategy === AiStrategyType.STABLE) {
       return [...candidates].sort((a, b) => {
-        const volatilityDiff = a.stock.volatilityLevel - b.stock.volatilityLevel;
+        const volatilityDiff =
+          a.stock.volatilityLevel - b.stock.volatilityLevel;
         return volatilityDiff || b.changeRate.minus(a.changeRate).toNumber();
       })[0];
     }
 
     if (strategy === AiStrategyType.MARKET_FOCUSED) {
-      return [...candidates].sort((a, b) => b.changeRate.minus(a.changeRate).toNumber())[0];
+      return [...candidates].sort((a, b) =>
+        b.changeRate.minus(a.changeRate).toNumber(),
+      )[0];
     }
 
     return candidates[Math.floor(Math.random() * candidates.length)];
   }
 
-  private pickScenarioSellCandidate(aiAccount: AiAccountWithPortfolio, scenario: ScenarioWithImpacts) {
-    const impactByStockId = new Map(scenario.impacts.map((impact) => [impact.stockId, impact]));
+  private pickScenarioSellCandidate(
+    aiAccount: AiAccountWithPortfolio,
+    scenario: ScenarioWithImpacts,
+  ) {
+    const impactByStockId = new Map(
+      scenario.impacts.map((impact) => [impact.stockId, impact]),
+    );
     const candidates = aiAccount.user.holdings
       .map((holding) => {
         const impact = impactByStockId.get(holding.stockId);
         return impact ? { holding, impact } : null;
       })
-      .filter((candidate): candidate is NonNullable<typeof candidate> => Boolean(candidate))
+      .filter((candidate): candidate is NonNullable<typeof candidate> =>
+        Boolean(candidate),
+      )
       .filter(
         ({ impact }) =>
           scenario.sentiment === ScenarioSentiment.NEGATIVE ||
           impact.changeRate.lessThan(0) ||
-          impact.stock.currentPrice.lessThan(impact.oldPrice)
+          impact.stock.currentPrice.lessThan(impact.oldPrice),
       );
 
     if (!candidates.length) {
@@ -386,7 +468,9 @@ export class AiAccountsService {
     }
 
     return [...candidates].sort((a, b) => {
-      const changeDiff = a.impact.changeRate.minus(b.impact.changeRate).toNumber();
+      const changeDiff = a.impact.changeRate
+        .minus(b.impact.changeRate)
+        .toNumber();
       return changeDiff || b.holding.quantity - a.holding.quantity;
     })[0];
   }
@@ -394,12 +478,17 @@ export class AiAccountsService {
   private buildBuyDecision(
     aiAccount: AiAccountWithPortfolio,
     scenario: ScenarioWithImpacts,
-    impact: ScenarioImpactWithStock
+    impact: ScenarioImpactWithStock,
   ): AiTradeDecision | null {
     const cashRatio = this.buyCashRatio(aiAccount.strategyType);
     const impactFactor = 0.5 + scenario.impactLevel / 20;
-    const maxSpend = aiAccount.user.cash.mul(aiAccount.riskLevel / 10).mul(cashRatio).mul(impactFactor);
-    const quantity = Math.floor(maxSpend.div(impact.stock.currentPrice).toNumber());
+    const maxSpend = aiAccount.user.cash
+      .mul(aiAccount.riskLevel / 10)
+      .mul(cashRatio)
+      .mul(impactFactor);
+    const quantity = Math.floor(
+      maxSpend.div(impact.stock.currentPrice).toNumber(),
+    );
 
     if (quantity < 1) {
       return null;
@@ -409,25 +498,36 @@ export class AiAccountsService {
       type: TradeType.BUY,
       stockId: impact.stockId,
       quantity,
-      reason: `SCENARIO_${scenario.sentiment}_BUY`
+      reason: `SCENARIO_${scenario.sentiment}_BUY`,
     };
   }
 
   private buildSellDecision(
     aiAccount: AiAccountWithPortfolio,
     scenario: ScenarioWithImpacts,
-    candidate: NonNullable<ReturnType<AiAccountsService["pickScenarioSellCandidate"]>>
+    candidate: NonNullable<
+      ReturnType<AiAccountsService["pickScenarioSellCandidate"]>
+    >,
   ): AiTradeDecision {
     const sellRatio = this.sellHoldingRatio(aiAccount.strategyType);
     const impactFactor = 0.5 + scenario.impactLevel / 20;
-    const ratio = Math.min(0.8, sellRatio * (aiAccount.riskLevel / 10) * impactFactor);
-    const quantity = Math.max(1, Math.min(candidate.holding.quantity, Math.floor(candidate.holding.quantity * ratio)));
+    const ratio = Math.min(
+      0.8,
+      sellRatio * (aiAccount.riskLevel / 10) * impactFactor,
+    );
+    const quantity = Math.max(
+      1,
+      Math.min(
+        candidate.holding.quantity,
+        Math.floor(candidate.holding.quantity * ratio),
+      ),
+    );
 
     return {
       type: TradeType.SELL,
       stockId: candidate.holding.stockId,
       quantity,
-      reason: `SCENARIO_${scenario.sentiment}_SELL`
+      reason: `SCENARIO_${scenario.sentiment}_SELL`,
     };
   }
 
@@ -462,7 +562,7 @@ export class AiAccountsService {
       stockId: string;
       quantity: number;
       stock: { currentPrice: Prisma.Decimal };
-    }>
+    }>,
   ) {
     if (!holdings.length) {
       return null;
@@ -477,5 +577,15 @@ export class AiAccountsService {
       throw new NotFoundException("AI account not found.");
     }
     return aiAccount;
+  }
+
+  private toResponse(account: AiAccountWithUser) {
+    return {
+      ...account,
+      nickname: account.user.nickname,
+      cash: account.user.cash,
+      totalAssetValue: account.user.totalAssetValue,
+      status: account.isActive && account.user.isActive ? "ACTIVE" : "INACTIVE",
+    };
   }
 }

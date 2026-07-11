@@ -7,7 +7,7 @@ import {
   Injectable,
   NotFoundException,
   ServiceUnavailableException,
-  UnauthorizedException
+  UnauthorizedException,
 } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import {
@@ -15,7 +15,7 @@ import {
   ScenarioCreatedBy,
   ScenarioSentiment,
   ScenarioType,
-  Stock
+  Stock,
 } from "@prisma/client";
 import OpenAI from "openai";
 import { zodTextFormat } from "openai/helpers/zod";
@@ -34,7 +34,7 @@ const ScenarioAiOutput = z.object({
   affectedMarketIds: z.array(z.string()),
   affectedStockIds: z.array(z.string()),
   sentiment: z.enum(["POSITIVE", "NEGATIVE", "MIXED", "NEUTRAL"]),
-  impactLevel: z.number().int().min(1).max(10)
+  impactLevel: z.number().int().min(1).max(10),
 });
 
 type ScenarioAiOutput = z.infer<typeof ScenarioAiOutput>;
@@ -68,20 +68,22 @@ export class ScenariosService {
     private readonly config: ConfigService,
     private readonly conditionalOrdersService: ConditionalOrdersService,
     private readonly prisma: PrismaService,
-    private readonly rankingsService: RankingsService
+    private readonly rankingsService: RankingsService,
   ) {}
 
   list() {
     return this.prisma.scenario.findMany({
       orderBy: { createdAt: "desc" },
-      include: { impacts: { include: { stock: true } } }
+      include: { impacts: { include: { stock: true } } },
     });
   }
 
   async get(id: string) {
     const scenario = await this.prisma.scenario.findUnique({
       where: { id },
-      include: { impacts: { include: { stock: { include: { market: true } } } } }
+      include: {
+        impacts: { include: { stock: { include: { market: true } } } },
+      },
     });
 
     if (!scenario) {
@@ -97,12 +99,12 @@ export class ScenariosService {
       models: {
         main: this.modelFor(ScenarioType.MAIN),
         big: this.modelFor(ScenarioType.BIG),
-        small: this.modelFor(ScenarioType.SMALL)
+        small: this.modelFor(ScenarioType.SMALL),
       },
       scenarioGeneration: {
         endpoint: "POST /admin/scenarios/test-openai",
-        persistsScenario: false
-      }
+        persistsScenario: false,
+      },
     };
   }
 
@@ -111,7 +113,10 @@ export class ScenariosService {
     const prompt =
       dto.prompt ??
       "V-FANDEX GPT 연동 확인용 짧은 테스트 시나리오를 생성해줘. 실제 가격 변동 수치는 쓰지 마.";
-    const output = await this.requestScenarioFromOpenAi(type, { ...dto, prompt });
+    const output = await this.requestScenarioFromOpenAi(type, {
+      ...dto,
+      prompt,
+    });
     const normalized = this.normalizeAiOutput(output.parsed, dto);
 
     return {
@@ -120,11 +125,15 @@ export class ScenariosService {
       model: output.model,
       scenario: normalized,
       persisted: false,
-      rawAiResponseId: output.responseId
+      rawAiResponseId: output.responseId,
     };
   }
 
-  async generate(type: ScenarioType, dto: GenerateScenarioDto) {
+  async generate(
+    type: ScenarioType,
+    dto: GenerateScenarioDto,
+    createdBy: ScenarioCreatedBy = ScenarioCreatedBy.ADMIN,
+  ) {
     const output = await this.requestScenarioFromOpenAi(type, dto);
     const normalized = this.normalizeAiOutput(output.parsed, dto);
     return this.prisma.scenario.create({
@@ -136,13 +145,14 @@ export class ScenariosService {
         affectedStockIds: normalized.affectedStockIds,
         sentiment: normalized.sentiment,
         impactLevel: normalized.impactLevel,
-        createdBy: ScenarioCreatedBy.ADMIN,
+        createdBy,
         rawAiResponse: {
           model: output.model,
           responseId: output.responseId,
-          output: normalized
-        }
-      }
+          createdBy,
+          output: normalized,
+        },
+      },
     });
   }
 
@@ -165,7 +175,12 @@ export class ScenariosService {
 
     await this.prisma.$transaction(async (tx) => {
       for (const stock of targetStocks) {
-        const changeRate = this.calculateChangeRate(scenario.type, scenario.sentiment, scenario.impactLevel, stock);
+        const changeRate = this.calculateChangeRate(
+          scenario.type,
+          scenario.sentiment,
+          scenario.impactLevel,
+          stock,
+        );
         const oldPrice = money(stock.currentPrice);
         const multiplier = new Prisma.Decimal(1).plus(changeRate.div(100));
         const newPrice = money(Prisma.Decimal.max(oldPrice.mul(multiplier), 1));
@@ -174,8 +189,8 @@ export class ScenariosService {
           where: { id: stock.id },
           data: {
             previousPrice: oldPrice,
-            currentPrice: newPrice
-          }
+            currentPrice: newPrice,
+          },
         });
 
         await tx.scenarioImpact.create({
@@ -185,8 +200,8 @@ export class ScenariosService {
             oldPrice,
             newPrice,
             changeRate,
-            impactReason: `${scenario.type}_${scenario.sentiment}_IMPACT`
-          }
+            impactReason: `${scenario.type}_${scenario.sentiment}_IMPACT`,
+          },
         });
 
         await tx.priceHistory.create({
@@ -194,11 +209,16 @@ export class ScenariosService {
             stockId: stock.id,
             price: newPrice,
             changeRate,
-            reason: `SCENARIO:${scenario.id}`
-          }
+            reason: `SCENARIO:${scenario.id}`,
+          },
         });
 
-        const orderResult = await this.conditionalOrdersService.processForStockInTx(tx, stock.id, newPrice);
+        const orderResult =
+          await this.conditionalOrdersService.processForStockInTx(
+            tx,
+            stock.id,
+            newPrice,
+          );
         conditionalOrderResults.push(...orderResult.results);
         affectedStocks.push({
           stockId: stock.id,
@@ -206,17 +226,19 @@ export class ScenariosService {
           beforePrice: oldPrice,
           afterPrice: newPrice,
           appliedRate: changeRate,
-          impactReason: `${scenario.type}_${scenario.sentiment}_IMPACT`
+          impactReason: `${scenario.type}_${scenario.sentiment}_IMPACT`,
         });
       }
 
       await tx.scenario.update({
         where: { id: scenario.id },
-        data: { appliedAt: new Date() }
+        data: { appliedAt: new Date() },
       });
     });
 
-    const aiTradeSummary = await this.aiAccountsService.runScenarioTrades(scenario.id);
+    const aiTradeSummary = await this.aiAccountsService.runScenarioTrades(
+      scenario.id,
+    );
     await this.rankingsService.recalculateAll();
     const appliedScenario = await this.get(id);
     return {
@@ -224,31 +246,45 @@ export class ScenariosService {
       affectedStocks,
       conditionalOrderResults,
       aiTradeSummary,
-      aiTradeResults: aiTradeSummary.results
+      aiTradeResults: aiTradeSummary.results,
     };
   }
 
   private async buildScenarioContext(dto: GenerateScenarioDto) {
     const [markets, stocks] = await Promise.all([
       this.prisma.market.findMany({
-        where: { id: dto.affectedMarketIds ? { in: dto.affectedMarketIds } : undefined, isActive: true },
-        select: { id: true, name: true, description: true }
+        where: {
+          id: dto.affectedMarketIds ? { in: dto.affectedMarketIds } : undefined,
+          isActive: true,
+        },
+        select: { id: true, name: true, description: true },
       }),
       this.prisma.stock.findMany({
         where: {
           id: dto.affectedStockIds ? { in: dto.affectedStockIds } : undefined,
-          marketId: dto.affectedMarketIds ? { in: dto.affectedMarketIds } : undefined,
-          isListed: true
+          marketId: dto.affectedMarketIds
+            ? { in: dto.affectedMarketIds }
+            : undefined,
+          isListed: true,
         },
-        select: { id: true, marketId: true, name: true, tags: true, volatilityLevel: true },
-        take: 100
-      })
+        select: {
+          id: true,
+          marketId: true,
+          name: true,
+          tags: true,
+          volatilityLevel: true,
+        },
+        take: 100,
+      }),
     ]);
 
     return { markets, stocks };
   }
 
-  private async requestScenarioFromOpenAi(type: ScenarioType, dto: GenerateScenarioDto) {
+  private async requestScenarioFromOpenAi(
+    type: ScenarioType,
+    dto: GenerateScenarioDto,
+  ) {
     const apiKey = this.openAiApiKey();
     if (!apiKey) {
       throw new BadRequestException("OPENAI_API_KEY is not configured.");
@@ -258,7 +294,7 @@ export class ScenariosService {
     const client = new OpenAI({
       apiKey,
       timeout: Number(this.config.get<string>("OPENAI_TIMEOUT_MS") ?? 30_000),
-      maxRetries: Number(this.config.get<string>("OPENAI_MAX_RETRIES") ?? 1)
+      maxRetries: Number(this.config.get<string>("OPENAI_MAX_RETRIES") ?? 1),
     });
     const context = await this.buildScenarioContext(dto);
 
@@ -269,7 +305,7 @@ export class ScenariosService {
           {
             role: "system",
             content:
-              "You create Korean virtual stock market scenarios for fandom and entertainment content. Return only the requested structured scenario. Do not calculate exact price changes."
+              "You create Korean virtual stock market scenarios for fandom and entertainment content. Return only the requested structured scenario. Do not calculate exact price changes.",
           },
           {
             role: "user",
@@ -278,24 +314,26 @@ export class ScenariosService {
               instruction:
                 "Generate a market scenario with narrative text, affected market/stock ids, sentiment, and impact level from 1 to 10. Do not include numeric price change values.",
               prompt: dto.prompt ?? null,
-              candidates: context
-            })
-          }
+              candidates: context,
+            }),
+          },
         ],
         text: {
-          format: zodTextFormat(ScenarioAiOutput, "v_fandex_scenario")
-        }
+          format: zodTextFormat(ScenarioAiOutput, "v_fandex_scenario"),
+        },
       });
 
       const parsed = response.output_parsed;
       if (!parsed) {
-        throw new BadGatewayException("OpenAI did not return a parseable scenario.");
+        throw new BadGatewayException(
+          "OpenAI did not return a parseable scenario.",
+        );
       }
 
       return {
         model,
         responseId: response.id,
-        parsed
+        parsed,
       };
     } catch (error) {
       this.handleOpenAiError(error);
@@ -312,12 +350,20 @@ export class ScenariosService {
       throw error;
     }
 
-    if (error instanceof OpenAI.AuthenticationError || error instanceof OpenAI.PermissionDeniedError) {
-      throw new UnauthorizedException("OpenAI API key is invalid or does not have access to the selected model.");
+    if (
+      error instanceof OpenAI.AuthenticationError ||
+      error instanceof OpenAI.PermissionDeniedError
+    ) {
+      throw new UnauthorizedException(
+        "OpenAI API key is invalid or does not have access to the selected model.",
+      );
     }
 
     if (error instanceof OpenAI.RateLimitError) {
-      throw new HttpException("OpenAI rate limit or credit limit was reached.", HttpStatus.TOO_MANY_REQUESTS);
+      throw new HttpException(
+        "OpenAI rate limit or credit limit was reached.",
+        HttpStatus.TOO_MANY_REQUESTS,
+      );
     }
 
     if (error instanceof OpenAI.APIConnectionTimeoutError) {
@@ -328,7 +374,10 @@ export class ScenariosService {
       throw new ServiceUnavailableException("Could not connect to OpenAI.");
     }
 
-    if (error instanceof OpenAI.BadRequestError || error instanceof OpenAI.NotFoundError) {
+    if (
+      error instanceof OpenAI.BadRequestError ||
+      error instanceof OpenAI.NotFoundError
+    ) {
       throw new BadGatewayException(error.message);
     }
 
@@ -339,13 +388,20 @@ export class ScenariosService {
     throw new BadGatewayException("OpenAI scenario generation failed.");
   }
 
-  private normalizeAiOutput(parsed: ScenarioAiOutput, dto: GenerateScenarioDto) {
+  private normalizeAiOutput(
+    parsed: ScenarioAiOutput,
+    dto: GenerateScenarioDto,
+  ) {
     return {
       ...parsed,
-      affectedMarketIds: dto.affectedMarketIds?.length ? dto.affectedMarketIds : parsed.affectedMarketIds,
-      affectedStockIds: dto.affectedStockIds?.length ? dto.affectedStockIds : parsed.affectedStockIds,
+      affectedMarketIds: dto.affectedMarketIds?.length
+        ? dto.affectedMarketIds
+        : parsed.affectedMarketIds,
+      affectedStockIds: dto.affectedStockIds?.length
+        ? dto.affectedStockIds
+        : parsed.affectedStockIds,
       sentiment: parsed.sentiment as ScenarioSentiment,
-      impactLevel: Math.min(Math.max(parsed.impactLevel, 1), 10)
+      impactLevel: Math.min(Math.max(parsed.impactLevel, 1), 10),
     };
   }
 
@@ -353,12 +409,15 @@ export class ScenariosService {
     affectedMarketIds: string[];
     affectedStockIds: string[];
   }) {
-    if (!scenario.affectedStockIds.length && !scenario.affectedMarketIds.length) {
+    if (
+      !scenario.affectedStockIds.length &&
+      !scenario.affectedMarketIds.length
+    ) {
       return this.prisma.stock.findMany({
         where: {
           isListed: true,
-          isTradingSuspended: false
-        }
+          isTradingSuspended: false,
+        },
       });
     }
 
@@ -367,10 +426,14 @@ export class ScenariosService {
         isListed: true,
         isTradingSuspended: false,
         OR: [
-          scenario.affectedStockIds.length ? { id: { in: scenario.affectedStockIds } } : undefined,
-          scenario.affectedMarketIds.length ? { marketId: { in: scenario.affectedMarketIds } } : undefined
-        ].filter(Boolean) as Prisma.StockWhereInput[]
-      }
+          scenario.affectedStockIds.length
+            ? { id: { in: scenario.affectedStockIds } }
+            : undefined,
+          scenario.affectedMarketIds.length
+            ? { marketId: { in: scenario.affectedMarketIds } }
+            : undefined,
+        ].filter(Boolean) as Prisma.StockWhereInput[],
+      },
     });
   }
 
@@ -390,14 +453,17 @@ export class ScenariosService {
     type: ScenarioType,
     sentiment: ScenarioSentiment,
     impactLevel: number,
-    stock: Pick<Stock, "volatilityLevel">
+    stock: Pick<Stock, "volatilityLevel">,
   ) {
     const range = this.rangeFor(type);
     const volatilityFactor = 0.6 + stock.volatilityLevel / 10;
     const impactFactor = impactLevel / 10;
     const noiseFactor = 0.85 + Math.random() * 0.3;
     const maxAbs = Math.max(Math.abs(range.min), Math.abs(range.max));
-    const magnitude = Math.min(maxAbs, maxAbs * impactFactor * volatilityFactor * noiseFactor);
+    const magnitude = Math.min(
+      maxAbs,
+      maxAbs * impactFactor * volatilityFactor * noiseFactor,
+    );
     const sign = this.signFor(sentiment);
 
     if (sign === 0) {
@@ -422,10 +488,21 @@ export class ScenariosService {
   }
 
   private rangeFor(type: ScenarioType) {
-    const prefix = type === ScenarioType.SMALL ? "SMALL" : type === ScenarioType.BIG ? "BIG" : "MAIN";
+    const prefix =
+      type === ScenarioType.SMALL
+        ? "SMALL"
+        : type === ScenarioType.BIG
+          ? "BIG"
+          : "MAIN";
     return {
-      min: Number(this.config.get<string>(`SCENARIO_${prefix}_MIN_CHANGE`) ?? this.defaultRange(type).min),
-      max: Number(this.config.get<string>(`SCENARIO_${prefix}_MAX_CHANGE`) ?? this.defaultRange(type).max)
+      min: Number(
+        this.config.get<string>(`SCENARIO_${prefix}_MIN_CHANGE`) ??
+          this.defaultRange(type).min,
+      ),
+      max: Number(
+        this.config.get<string>(`SCENARIO_${prefix}_MAX_CHANGE`) ??
+          this.defaultRange(type).max,
+      ),
     };
   }
 

@@ -45,7 +45,7 @@ async function main() {
     update: {
       nickname: adminNickname,
       role: Role.ADMIN,
-      isActive: true
+      isActive: true,
     },
     create: {
       email: adminEmail,
@@ -55,26 +55,34 @@ async function main() {
       cash: initialCash,
       initialCash,
       totalAssetValue: initialCash,
-      isActive: true
-    }
+      isActive: true,
+    },
   });
 
   await prisma.dividendSetting.upsert({
     where: { id: "default" },
     create: {},
-    update: {}
+    update: {},
   });
 
   await prisma.marketSimulationSetting.upsert({
     where: { id: "default" },
     create: {},
-    update: {}
+    update: {},
+  });
+
+  await prisma.scenarioAutomationSetting.upsert({
+    where: { id: "default" },
+    create: {},
+    update: {},
   });
 
   await seedMarketsAndStocks(loadSeedData());
 
   const now = new Date();
-  const season = await prisma.season.findFirst({ where: { status: SeasonStatus.ACTIVE } });
+  const season = await prisma.season.findFirst({
+    where: { status: SeasonStatus.ACTIVE },
+  });
   if (!season) {
     await prisma.season.create({
       data: {
@@ -82,8 +90,8 @@ async function main() {
         startsAt: now,
         endsAt: new Date(now.getTime() + 1000 * 60 * 60 * 24 * 90),
         initialCash,
-        status: SeasonStatus.ACTIVE
-      }
+        status: SeasonStatus.ACTIVE,
+      },
     });
   }
 }
@@ -103,15 +111,15 @@ async function seedMarketsAndStocks(seedData: SeedData) {
         description: marketSeed.description,
         iconUrl: marketSeed.iconUrl,
         sortOrder: marketSeed.sortOrder ?? index,
-        isActive: marketSeed.isActive ?? true
+        isActive: marketSeed.isActive ?? true,
       },
       create: {
         name: marketSeed.name,
         description: marketSeed.description,
         iconUrl: marketSeed.iconUrl,
         sortOrder: marketSeed.sortOrder ?? index,
-        isActive: marketSeed.isActive ?? true
-      }
+        isActive: marketSeed.isActive ?? true,
+      },
     });
 
     for (const stockSeed of marketSeed.stocks ?? []) {
@@ -122,16 +130,21 @@ async function seedMarketsAndStocks(seedData: SeedData) {
 
 async function seedStock(marketId: string, stockSeed: SeedStock) {
   const currentPrice = new Prisma.Decimal(stockSeed.currentPrice);
-  const previousPrice = new Prisma.Decimal(stockSeed.previousPrice ?? stockSeed.currentPrice);
-  const initialPrice = new Prisma.Decimal(stockSeed.initialPrice ?? stockSeed.previousPrice ?? stockSeed.currentPrice);
-  const circulatingSupply = stockSeed.circulatingSupply ?? stockSeed.totalSupply;
+  const previousPrice = new Prisma.Decimal(
+    stockSeed.previousPrice ?? stockSeed.currentPrice,
+  );
+  const initialPrice = new Prisma.Decimal(
+    stockSeed.initialPrice ?? stockSeed.previousPrice ?? stockSeed.currentPrice,
+  );
+  const circulatingSupply =
+    stockSeed.circulatingSupply ?? stockSeed.totalSupply;
 
   const stock = await prisma.stock.upsert({
     where: {
       marketId_name: {
         marketId,
-        name: stockSeed.name
-      }
+        name: stockSeed.name,
+      },
     },
     update: {
       description: stockSeed.description,
@@ -145,7 +158,7 @@ async function seedStock(marketId: string, stockSeed: SeedStock) {
       volatilityLevel: stockSeed.volatilityLevel ?? 5,
       dividendEnabled: stockSeed.dividendEnabled ?? false,
       baseDividendRate: new Prisma.Decimal(stockSeed.baseDividendRate ?? 0),
-      isListed: stockSeed.isListed ?? true
+      isListed: stockSeed.isListed ?? true,
     },
     create: {
       marketId,
@@ -161,14 +174,21 @@ async function seedStock(marketId: string, stockSeed: SeedStock) {
       volatilityLevel: stockSeed.volatilityLevel ?? 5,
       dividendEnabled: stockSeed.dividendEnabled ?? false,
       baseDividendRate: new Prisma.Decimal(stockSeed.baseDividendRate ?? 0),
-      isListed: stockSeed.isListed ?? true
-    }
+      isListed: stockSeed.isListed ?? true,
+    },
   });
 
-  const historyCount = await prisma.priceHistory.count({ where: { stockId: stock.id } });
+  const historyCount = await prisma.priceHistory.count({
+    where: { stockId: stock.id },
+  });
   if (historyCount === 0) {
     await prisma.priceHistory.createMany({
-      data: buildDemoPriceHistory(stock.id, stockSeed.name, currentPrice, previousPrice)
+      data: buildDemoPriceHistory(
+        stock.id,
+        stockSeed.name,
+        currentPrice,
+        previousPrice,
+      ),
     });
   }
 }
@@ -177,16 +197,20 @@ function buildDemoPriceHistory(
   stockId: string,
   stockName: string,
   currentPrice: Prisma.Decimal,
-  previousPrice: Prisma.Decimal
+  previousPrice: Prisma.Decimal,
 ) {
   const now = Date.now();
-  const points: Array<{ createdAt: Date; price: Prisma.Decimal; reason: string }> = [];
+  const points: Array<{
+    createdAt: Date;
+    price: Prisma.Decimal;
+    reason: string;
+  }> = [];
 
   for (let i = 29; i >= 1; i -= 1) {
     points.push({
       createdAt: new Date(now - i * 24 * 60 * 60 * 1000),
       price: demoPrice(stockName, currentPrice, 30 - i, 0.82, 1.1),
-      reason: "SEED_DAILY"
+      reason: "SEED_DAILY",
     });
   }
 
@@ -194,7 +218,7 @@ function buildDemoPriceHistory(
     points.push({
       createdAt: new Date(now - i * 60 * 60 * 1000),
       price: demoPrice(stockName, currentPrice, 80 - i, 0.94, 1.04),
-      reason: "SEED_HOURLY"
+      reason: "SEED_HOURLY",
     });
   }
 
@@ -202,40 +226,53 @@ function buildDemoPriceHistory(
     points.push({
       createdAt: new Date(now - i * 60 * 1000),
       price: demoPrice(stockName, currentPrice, 140 - i, 0.985, 1.015),
-      reason: "SEED_MINUTE"
+      reason: "SEED_MINUTE",
     });
   }
 
   points.push({
     createdAt: new Date(now - 30_000),
     price: previousPrice,
-    reason: "SEED_PREVIOUS"
+    reason: "SEED_PREVIOUS",
   });
   points.push({
     createdAt: new Date(now),
     price: currentPrice,
-    reason: "SEED_CURRENT"
+    reason: "SEED_CURRENT",
   });
 
   let lastPrice = points[0]?.price ?? currentPrice;
   return points.map((point) => {
-    const changeRate = lastPrice.equals(0) ? new Prisma.Decimal(0) : point.price.minus(lastPrice).div(lastPrice).mul(100);
+    const changeRate = lastPrice.equals(0)
+      ? new Prisma.Decimal(0)
+      : point.price.minus(lastPrice).div(lastPrice).mul(100);
     lastPrice = point.price;
     return {
       stockId,
       price: point.price,
       changeRate,
       reason: point.reason,
-      createdAt: point.createdAt
+      createdAt: point.createdAt,
     };
   });
 }
 
-function demoPrice(stockName: string, basePrice: Prisma.Decimal, index: number, minFactor: number, maxFactor: number) {
-  const seed = [...stockName].reduce((sum, char) => sum + char.charCodeAt(0), 0);
+function demoPrice(
+  stockName: string,
+  basePrice: Prisma.Decimal,
+  index: number,
+  minFactor: number,
+  maxFactor: number,
+) {
+  const seed = [...stockName].reduce(
+    (sum, char) => sum + char.charCodeAt(0),
+    0,
+  );
   const wave = Math.sin((seed + index * 17) / 9);
   const factor = minFactor + ((wave + 1) / 2) * (maxFactor - minFactor);
-  return new Prisma.Decimal(Math.max(1, Math.round(basePrice.toNumber() * factor)));
+  return new Prisma.Decimal(
+    Math.max(1, Math.round(basePrice.toNumber() * factor)),
+  );
 }
 
 main()

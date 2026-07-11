@@ -9,7 +9,7 @@ import {
   ScenarioSentiment,
   ScenarioType,
   SeasonStatus,
-  TradeType
+  TradeType,
 } from "@prisma/client";
 
 export class UserResponseDto {
@@ -677,6 +677,15 @@ export class MarketSimulationSettingResponseDto {
   @ApiProperty()
   intervalMinutes: number;
 
+  @ApiProperty()
+  randomIntervalEnabled: boolean;
+
+  @ApiProperty()
+  minIntervalMinutes: number;
+
+  @ApiProperty()
+  maxIntervalMinutes: number;
+
   @ApiProperty({ example: "-7.000000" })
   minChangeRate: string;
 
@@ -749,4 +758,165 @@ export class MarketSimulationRunResponseDto {
 
   @ApiPropertyOptional({ nullable: true })
   nextRunAt?: Date | null;
+
+  @ApiPropertyOptional({ nullable: true, example: 11 })
+  scheduledIntervalMinutes?: number | null;
+}
+
+export class ScenarioAutomationSettingResponseDto {
+  @ApiProperty()
+  id: string;
+
+  @ApiProperty()
+  isEnabled: boolean;
+
+  @ApiProperty()
+  mainEnabled: boolean;
+
+  @ApiProperty()
+  smallEnabled: boolean;
+
+  @ApiProperty()
+  autoApply: boolean;
+
+  @ApiProperty({ example: 12 })
+  mainMinIntervalHours: number;
+
+  @ApiProperty({ example: 24 })
+  mainMaxIntervalHours: number;
+
+  @ApiProperty({ example: 120 })
+  smallMinIntervalMinutes: number;
+
+  @ApiProperty({ example: 240 })
+  smallMaxIntervalMinutes: number;
+
+  @ApiProperty({ example: 2 })
+  dailyMainLimit: number;
+
+  @ApiProperty({ example: 12 })
+  dailySmallLimit: number;
+
+  @ApiProperty({ example: 15 })
+  retryDelayMinutes: number;
+
+  @ApiPropertyOptional({ nullable: true })
+  lastMainRunAt?: Date | null;
+
+  @ApiPropertyOptional({ nullable: true })
+  nextMainRunAt?: Date | null;
+
+  @ApiPropertyOptional({ nullable: true })
+  lastSmallRunAt?: Date | null;
+
+  @ApiPropertyOptional({ nullable: true })
+  nextSmallRunAt?: Date | null;
+
+  @ApiPropertyOptional({ nullable: true })
+  lastMainError?: string | null;
+
+  @ApiPropertyOptional({ nullable: true })
+  lastMainErrorAt?: Date | null;
+
+  @ApiPropertyOptional({ nullable: true })
+  lastSmallError?: string | null;
+
+  @ApiPropertyOptional({ nullable: true })
+  lastSmallErrorAt?: Date | null;
+
+  @ApiProperty()
+  todayMainCount: number;
+
+  @ApiProperty()
+  todaySmallCount: number;
+
+  @ApiProperty()
+  serverTime: Date;
+
+  @ApiProperty()
+  updatedAt: Date;
+}
+
+export class ScenarioAutomationRunResponseDto {
+  @ApiProperty({ enum: [ScenarioType.MAIN, ScenarioType.SMALL] })
+  type: ScenarioType;
+
+  @ApiProperty({
+    enum: [
+      "COMPLETED",
+      "GENERATED_APPLY_FAILED",
+      "FAILED",
+      "SKIPPED_ALREADY_RUNNING",
+      "SKIPPED_NOT_DUE",
+      "SKIPPED_LEASED",
+      "SKIPPED_DAILY_LIMIT",
+    ],
+  })
+  status: string;
+
+  @ApiPropertyOptional({ type: ScenarioResponseDto })
+  scenario?: ScenarioResponseDto;
+
+  @ApiPropertyOptional()
+  autoApply?: boolean;
+
+  @ApiPropertyOptional({ type: ScenarioApplyResponseDto, nullable: true })
+  application?: ScenarioApplyResponseDto | null;
+
+  @ApiPropertyOptional({ nullable: true })
+  applyError?: string | null;
+
+  @ApiPropertyOptional()
+  completedAt?: Date;
+
+  @ApiPropertyOptional()
+  nextRunAt?: Date;
+}
+
+export class ScenarioAutomationProcessResponseDto {
+  @ApiProperty()
+  ok: boolean;
+
+  @ApiProperty({ enum: ["DISABLED", "IDLE", "PROCESSED"] })
+  status: string;
+
+  @ApiProperty()
+  checkedAt: Date;
+
+  @ApiProperty({ type: [ScenarioAutomationRunResponseDto] })
+  results: ScenarioAutomationRunResponseDto[];
+}
+
+export class AutomationTaskResponseDto {
+  @ApiProperty()
+  name: string;
+
+  @ApiProperty({ enum: ["IDLE", "COMPLETED", "FAILED"] })
+  status: string;
+
+  @ApiPropertyOptional({ type: Object, nullable: true })
+  result?: Record<string, unknown> | null;
+
+  @ApiPropertyOptional()
+  error?: string;
+}
+
+export class AutomationTickResponseDto {
+  @ApiProperty()
+  ok: boolean;
+
+  @ApiProperty({ enum: ["COMPLETED", "SKIPPED_ALREADY_RUNNING"] })
+  status: string;
+
+  @ApiProperty({ enum: ["INTERNAL", "EXTERNAL"] })
+  source: string;
+
+  @ApiProperty()
+  startedAt: Date;
+
+  @ApiProperty()
+  completedAt: Date;
+
+  @ApiProperty({ type: [AutomationTaskResponseDto] })
+  tasks: AutomationTaskResponseDto[];
 }

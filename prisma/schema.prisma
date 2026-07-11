@@ -69,24 +69,24 @@ enum AiStrategyType {
 }
 
 model User {
-  id                  String             @id @default(cuid())
-  email               String?            @unique
-  passwordHash        String?
-  nickname            String
-  role                Role               @default(USER)
-  cash                Decimal            @default(0) @db.Decimal(20, 4)
-  initialCash         Decimal            @default(0) @db.Decimal(20, 4)
-  totalAssetValue     Decimal            @default(0) @db.Decimal(20, 4)
-  isActive            Boolean            @default(true)
-  createdAt           DateTime           @default(now())
-  updatedAt           DateTime           @updatedAt
-  aiAccount           AiAccount?
-  conditionalOrders   ConditionalOrder[]
-  dividends           Dividend[]
-  holdings            Holding[]
-  rankings            Ranking[]
-  trades              Trade[]
-  watchlistItems      Watchlist[]
+  id                String             @id @default(cuid())
+  email             String?            @unique
+  passwordHash      String?
+  nickname          String
+  role              Role               @default(USER)
+  cash              Decimal            @default(0) @db.Decimal(20, 4)
+  initialCash       Decimal            @default(0) @db.Decimal(20, 4)
+  totalAssetValue   Decimal            @default(0) @db.Decimal(20, 4)
+  isActive          Boolean            @default(true)
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  aiAccount         AiAccount?
+  conditionalOrders ConditionalOrder[]
+  dividends         Dividend[]
+  holdings          Holding[]
+  rankings          Ranking[]
+  trades            Trade[]
+  watchlistItems    Watchlist[]
 
   @@index([role])
   @@index([isActive])
@@ -108,33 +108,33 @@ model Market {
 }
 
 model Stock {
-  id                  String             @id @default(cuid())
-  marketId            String
-  name                String
-  description         String?
-  imageUrl            String?
-  tags                String[]           @default([])
-  currentPrice        Decimal            @db.Decimal(20, 4)
-  previousPrice       Decimal            @db.Decimal(20, 4)
-  initialPrice        Decimal            @db.Decimal(20, 4)
-  totalSupply         Int
-  circulatingSupply   Int
-  volatilityLevel     Int                @default(5)
-  dividendEnabled     Boolean            @default(false)
-  baseDividendRate    Decimal            @default(0) @db.Decimal(10, 6)
-  isListed            Boolean            @default(true)
-  isTradingSuspended  Boolean            @default(false)
-  delistedAt          DateTime?
-  createdAt           DateTime           @default(now())
-  updatedAt           DateTime           @updatedAt
-  conditionalOrders   ConditionalOrder[]
-  dividends           Dividend[]
-  holdings            Holding[]
-  market              Market             @relation(fields: [marketId], references: [id], onDelete: Restrict)
-  priceHistories      PriceHistory[]
-  scenarioImpacts     ScenarioImpact[]
-  trades              Trade[]
-  watchlistItems      Watchlist[]
+  id                 String             @id @default(cuid())
+  marketId           String
+  name               String
+  description        String?
+  imageUrl           String?
+  tags               String[]           @default([])
+  currentPrice       Decimal            @db.Decimal(20, 4)
+  previousPrice      Decimal            @db.Decimal(20, 4)
+  initialPrice       Decimal            @db.Decimal(20, 4)
+  totalSupply        Int
+  circulatingSupply  Int
+  volatilityLevel    Int                @default(5)
+  dividendEnabled    Boolean            @default(false)
+  baseDividendRate   Decimal            @default(0) @db.Decimal(10, 6)
+  isListed           Boolean            @default(true)
+  isTradingSuspended Boolean            @default(false)
+  delistedAt         DateTime?
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+  conditionalOrders  ConditionalOrder[]
+  dividends          Dividend[]
+  holdings           Holding[]
+  market             Market             @relation(fields: [marketId], references: [id], onDelete: Restrict)
+  priceHistories     PriceHistory[]
+  scenarioImpacts    ScenarioImpact[]
+  trades             Trade[]
+  watchlistItems     Watchlist[]
 
   @@unique([marketId, name])
   @@index([marketId, isListed])
@@ -142,16 +142,16 @@ model Stock {
 }
 
 model Holding {
-  id               String   @id @default(cuid())
-  userId           String
-  stockId          String
-  quantity         Int
-  averageBuyPrice  Decimal  @db.Decimal(20, 4)
-  realizedProfit   Decimal  @default(0) @db.Decimal(20, 4)
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
-  stock            Stock    @relation(fields: [stockId], references: [id], onDelete: Cascade)
-  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id              String   @id @default(cuid())
+  userId          String
+  stockId         String
+  quantity        Int
+  averageBuyPrice Decimal  @db.Decimal(20, 4)
+  realizedProfit  Decimal  @default(0) @db.Decimal(20, 4)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  stock           Stock    @relation(fields: [stockId], references: [id], onDelete: Cascade)
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, stockId])
   @@index([stockId])
@@ -179,20 +179,20 @@ model Trade {
 }
 
 model ConditionalOrder {
-  id             String                 @id @default(cuid())
-  userId         String
-  stockId        String
-  type           TradeType
-  triggerPrice   Decimal                @db.Decimal(20, 4)
-  conditionType  ConditionType
-  quantity       Int
-  status         ConditionalOrderStatus @default(ACTIVE)
-  failureReason  String?
-  createdAt      DateTime               @default(now())
-  updatedAt      DateTime               @updatedAt
-  triggeredAt    DateTime?
-  stock          Stock                  @relation(fields: [stockId], references: [id], onDelete: Cascade)
-  user           User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id            String                 @id @default(cuid())
+  userId        String
+  stockId       String
+  type          TradeType
+  triggerPrice  Decimal                @db.Decimal(20, 4)
+  conditionType ConditionType
+  quantity      Int
+  status        ConditionalOrderStatus @default(ACTIVE)
+  failureReason String?
+  createdAt     DateTime               @default(now())
+  updatedAt     DateTime               @updatedAt
+  triggeredAt   DateTime?
+  stock         Stock                  @relation(fields: [stockId], references: [id], onDelete: Cascade)
+  user          User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([status, stockId])
   @@index([userId, status])
@@ -216,31 +216,62 @@ model Dividend {
 }
 
 model DividendSetting {
-  id                    String   @id @default("default")
-  baseDividendRate      Decimal  @default(0.01) @db.Decimal(10, 6)
-  claimCountMultiplier  Decimal  @default(0.1) @db.Decimal(10, 6)
-  claimCooldownMinutes  Int      @default(1440)
-  seasonalClaimLimit    Int      @default(30)
-  isEnabled             Boolean  @default(false)
-  lastRunAt             DateTime?
-  nextRunAt             DateTime?
-  updatedAt             DateTime @updatedAt
+  id                   String    @id @default("default")
+  baseDividendRate     Decimal   @default(0.01) @db.Decimal(10, 6)
+  claimCountMultiplier Decimal   @default(0.1) @db.Decimal(10, 6)
+  claimCooldownMinutes Int       @default(1440)
+  seasonalClaimLimit   Int       @default(30)
+  isEnabled            Boolean   @default(false)
+  lastRunAt            DateTime?
+  nextRunAt            DateTime?
+  updatedAt            DateTime  @updatedAt
 }
 
 model MarketSimulationSetting {
-  id                 String   @id @default("default")
-  isEnabled          Boolean  @default(false)
-  intervalMinutes    Int      @default(5)
-  minChangeRate      Decimal  @default(-7) @db.Decimal(10, 6)
-  maxChangeRate      Decimal  @default(7) @db.Decimal(10, 6)
-  extremeMinRate     Decimal  @default(-80) @db.Decimal(10, 6)
-  extremeMaxRate     Decimal  @default(300) @db.Decimal(10, 6)
-  extremeChance      Decimal  @default(0.04) @db.Decimal(10, 6)
-  volatilityWeight   Decimal  @default(1) @db.Decimal(10, 6)
-  targetStockCount   Int?
-  lastRunAt          DateTime?
-  nextRunAt          DateTime?
-  updatedAt          DateTime @updatedAt
+  id                    String    @id @default("default")
+  isEnabled             Boolean   @default(false)
+  intervalMinutes       Int       @default(5)
+  randomIntervalEnabled Boolean   @default(true)
+  minIntervalMinutes    Int       @default(5)
+  maxIntervalMinutes    Int       @default(15)
+  minChangeRate         Decimal   @default(-7) @db.Decimal(10, 6)
+  maxChangeRate         Decimal   @default(7) @db.Decimal(10, 6)
+  extremeMinRate        Decimal   @default(-80) @db.Decimal(10, 6)
+  extremeMaxRate        Decimal   @default(300) @db.Decimal(10, 6)
+  extremeChance         Decimal   @default(0.04) @db.Decimal(10, 6)
+  volatilityWeight      Decimal   @default(1) @db.Decimal(10, 6)
+  targetStockCount      Int?
+  lastRunAt             DateTime?
+  nextRunAt             DateTime?
+  updatedAt             DateTime  @updatedAt
+}
+
+model ScenarioAutomationSetting {
+  id                      String    @id @default("default")
+  isEnabled               Boolean   @default(false)
+  mainEnabled             Boolean   @default(true)
+  smallEnabled            Boolean   @default(true)
+  autoApply               Boolean   @default(true)
+  mainMinIntervalHours    Int       @default(12)
+  mainMaxIntervalHours    Int       @default(24)
+  smallMinIntervalMinutes Int       @default(120)
+  smallMaxIntervalMinutes Int       @default(240)
+  dailyMainLimit          Int       @default(2)
+  dailySmallLimit         Int       @default(12)
+  retryDelayMinutes       Int       @default(15)
+  lastMainRunAt           DateTime?
+  nextMainRunAt           DateTime?
+  mainLeaseUntil          DateTime?
+  lastSmallRunAt          DateTime?
+  nextSmallRunAt          DateTime?
+  smallLeaseUntil         DateTime?
+  lastMainError           String?
+  lastMainErrorAt         DateTime?
+  lastSmallError          String?
+  lastSmallErrorAt        DateTime?
+  lastError               String?
+  lastErrorAt             DateTime?
+  updatedAt               DateTime  @updatedAt
 }
 
 model Watchlist {
@@ -291,17 +322,17 @@ model Ranking {
 }
 
 model Scenario {
-  id                String              @id @default(cuid())
+  id                String            @id @default(cuid())
   type              ScenarioType
   title             String
   content           String
-  affectedMarketIds String[]            @default([])
-  affectedStockIds  String[]            @default([])
+  affectedMarketIds String[]          @default([])
+  affectedStockIds  String[]          @default([])
   sentiment         ScenarioSentiment
   impactLevel       Int
-  createdBy         ScenarioCreatedBy   @default(ADMIN)
+  createdBy         ScenarioCreatedBy @default(ADMIN)
   rawAiResponse     Json?
-  createdAt         DateTime            @default(now())
+  createdAt         DateTime          @default(now())
   appliedAt         DateTime?
   impacts           ScenarioImpact[]
 
@@ -310,29 +341,29 @@ model Scenario {
 }
 
 model ScenarioImpact {
-  id            String   @id @default(cuid())
-  scenarioId    String
-  stockId       String
-  oldPrice      Decimal  @db.Decimal(20, 4)
-  newPrice      Decimal  @db.Decimal(20, 4)
-  changeRate    Decimal  @db.Decimal(10, 6)
-  impactReason  String?
-  createdAt     DateTime @default(now())
-  scenario      Scenario @relation(fields: [scenarioId], references: [id], onDelete: Cascade)
-  stock         Stock    @relation(fields: [stockId], references: [id], onDelete: Cascade)
+  id           String   @id @default(cuid())
+  scenarioId   String
+  stockId      String
+  oldPrice     Decimal  @db.Decimal(20, 4)
+  newPrice     Decimal  @db.Decimal(20, 4)
+  changeRate   Decimal  @db.Decimal(10, 6)
+  impactReason String?
+  createdAt    DateTime @default(now())
+  scenario     Scenario @relation(fields: [scenarioId], references: [id], onDelete: Cascade)
+  stock        Stock    @relation(fields: [stockId], references: [id], onDelete: Cascade)
 
   @@index([scenarioId])
   @@index([stockId, createdAt])
 }
 
 model PriceHistory {
-  id          String   @id @default(cuid())
-  stockId     String
-  price       Decimal  @db.Decimal(20, 4)
-  changeRate  Decimal  @db.Decimal(10, 6)
-  reason      String?
-  createdAt   DateTime @default(now())
-  stock       Stock    @relation(fields: [stockId], references: [id], onDelete: Cascade)
+  id         String   @id @default(cuid())
+  stockId    String
+  price      Decimal  @db.Decimal(20, 4)
+  changeRate Decimal  @db.Decimal(10, 6)
+  reason     String?
+  createdAt  DateTime @default(now())
+  stock      Stock    @relation(fields: [stockId], references: [id], onDelete: Cascade)
 
   @@index([stockId, createdAt])
 }

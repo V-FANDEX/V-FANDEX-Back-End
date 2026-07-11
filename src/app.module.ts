@@ -5,10 +5,13 @@ import { AdminController } from "./admin/admin.controller";
 import { AdminService } from "./admin/admin.service";
 import { AiAccountsController } from "./ai-accounts/ai-accounts.controller";
 import { AiAccountsService } from "./ai-accounts/ai-accounts.service";
+import { AutomationSchedulerController } from "./automation/automation-scheduler.controller";
+import { AutomationSchedulerService } from "./automation/automation-scheduler.service";
 import { AuthController } from "./auth/auth.controller";
 import { AuthService } from "./auth/auth.service";
 import { ConditionalOrdersController } from "./conditional-orders/conditional-orders.controller";
 import { ConditionalOrdersService } from "./conditional-orders/conditional-orders.service";
+import { SchedulerSecretGuard } from "./common/guards/scheduler-secret.guard";
 import { DividendsController } from "./dividends/dividends.controller";
 import { DividendsService } from "./dividends/dividends.service";
 import { HealthController } from "./health/health.controller";
@@ -21,6 +24,8 @@ import { PortfolioService } from "./portfolio/portfolio.service";
 import { PrismaService } from "./prisma/prisma.service";
 import { RankingsController } from "./rankings/rankings.controller";
 import { RankingsService } from "./rankings/rankings.service";
+import { ScenarioAutomationController } from "./scenario-automation/scenario-automation.controller";
+import { ScenarioAutomationService } from "./scenario-automation/scenario-automation.service";
 import { ScenariosController } from "./scenarios/scenarios.controller";
 import { ScenariosService } from "./scenarios/scenarios.service";
 import { SeasonsController } from "./seasons/seasons.controller";
@@ -41,13 +46,14 @@ import { WatchlistService } from "./watchlist/watchlist.service";
       inject: [ConfigService],
       useFactory: (config: ConfigService) => ({
         secret: config.get<string>("JWT_SECRET") ?? "dev-secret",
-        signOptions: { expiresIn: "7d" }
-      })
-    })
+        signOptions: { expiresIn: "7d" },
+      }),
+    }),
   ],
   controllers: [
     AdminController,
     AiAccountsController,
+    AutomationSchedulerController,
     AuthController,
     ConditionalOrdersController,
     DividendsController,
@@ -56,15 +62,17 @@ import { WatchlistService } from "./watchlist/watchlist.service";
     MarketSimulationController,
     PortfolioController,
     RankingsController,
+    ScenarioAutomationController,
     ScenariosController,
     SeasonsController,
     StocksController,
     TradingController,
-    WatchlistController
+    WatchlistController,
   ],
   providers: [
     AdminService,
     AiAccountsService,
+    AutomationSchedulerService,
     AuthService,
     ConditionalOrdersService,
     DividendsService,
@@ -73,12 +81,14 @@ import { WatchlistService } from "./watchlist/watchlist.service";
     PortfolioService,
     PrismaService,
     RankingsService,
+    ScenarioAutomationService,
+    SchedulerSecretGuard,
     ScenariosService,
     SeasonsService,
     StocksService,
     TradingService,
     UsersService,
-    WatchlistService
-  ]
+    WatchlistService,
+  ],
 })
 export class AppModule {}
