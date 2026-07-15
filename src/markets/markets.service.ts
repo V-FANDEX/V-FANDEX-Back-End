@@ -1,4 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
+import { SeedSource } from "@prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
 import { CreateMarketDto } from "./dto/create-market.dto";
 import { UpdateMarketDto } from "./dto/update-market.dto";
@@ -72,6 +73,40 @@ export class MarketsService {
     return this.prisma.market.update({
       where: { id },
       data: { isActive: false }
+    });
+  }
+
+  async saveToSeed(id: string, adminId: string) {
+    const market = await this.prisma.market.findUnique({ where: { id } });
+    if (!market) {
+      throw new NotFoundException("Market not found.");
+    }
+
+    const seededAt = new Date();
+    return this.prisma.$transaction(async (tx) => {
+      const savedMarket = await tx.market.update({
+        where: { id },
+        data: {
+          seedSource: SeedSource.ADMIN,
+          seededAt
+        }
+      });
+
+      await tx.adminAuditLog.create({
+        data: {
+          adminId,
+          action: "MARKET_SAVED_TO_SEED",
+          metadata: {
+            marketId: market.id,
+            marketName: market.name
+          }
+        }
+      });
+
+      return {
+        ...savedMarket,
+        status: savedMarket.isActive ? "ACTIVE" : "INACTIVE"
+      };
     });
   }
 

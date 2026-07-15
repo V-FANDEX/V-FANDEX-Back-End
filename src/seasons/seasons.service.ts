@@ -196,6 +196,7 @@ export class SeasonsService {
     const nonSeedMarkets = await tx.market.deleteMany({
       where: {
         name: { notIn: seedMarketNames },
+        OR: [{ seedSource: null }, { seedSource: SeedSource.FILE }],
         stocks: { none: { seedSource: SeedSource.ADMIN } }
       }
     });
@@ -213,14 +214,17 @@ export class SeasonsService {
           description: marketSeed.description,
           iconUrl: marketSeed.iconUrl,
           sortOrder: marketSeed.sortOrder ?? index,
-          isActive: marketSeed.isActive ?? true
+          isActive: marketSeed.isActive ?? true,
+          seedSource: SeedSource.FILE,
+          seededAt: null
         },
         create: {
           name: marketSeed.name,
           description: marketSeed.description,
           iconUrl: marketSeed.iconUrl,
           sortOrder: marketSeed.sortOrder ?? index,
-          isActive: marketSeed.isActive ?? true
+          isActive: marketSeed.isActive ?? true,
+          seedSource: SeedSource.FILE
         }
       });
       seedMarketsApplied += 1;
@@ -240,11 +244,18 @@ export class SeasonsService {
       }
     }
 
+    const adminSeedMarkets = await tx.market.findMany({
+      where: { seedSource: SeedSource.ADMIN },
+      select: { id: true }
+    });
     const adminSeedStocks = await tx.stock.findMany({
       where: { seedSource: SeedSource.ADMIN },
       orderBy: { createdAt: "asc" }
     });
-    const adminSeedMarketIds = new Set(adminSeedStocks.map((stock) => stock.marketId));
+    const adminSeedMarketIds = new Set(adminSeedMarkets.map((market) => market.id));
+    for (const stock of adminSeedStocks) {
+      adminSeedMarketIds.add(stock.marketId);
+    }
     const adminOnlySeedMarketIds = new Set(
       [...adminSeedMarketIds].filter((marketId) => !seedMarketIds.has(marketId))
     );

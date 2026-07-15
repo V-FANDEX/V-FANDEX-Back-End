@@ -118,6 +118,8 @@ async function seedMarketsAndStocks(seedData: SeedData) {
         iconUrl: marketSeed.iconUrl,
         sortOrder: marketSeed.sortOrder ?? index,
         isActive: marketSeed.isActive ?? true,
+        seedSource: SeedSource.FILE,
+        seededAt: null,
       },
       create: {
         name: marketSeed.name,
@@ -125,6 +127,7 @@ async function seedMarketsAndStocks(seedData: SeedData) {
         iconUrl: marketSeed.iconUrl,
         sortOrder: marketSeed.sortOrder ?? index,
         isActive: marketSeed.isActive ?? true,
+        seedSource: SeedSource.FILE,
       },
     });
 

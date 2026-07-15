@@ -72,6 +72,12 @@ export class MarketResponseDto {
   @ApiProperty()
   isActive: boolean;
 
+  @ApiPropertyOptional({ enum: SeedSource, nullable: true })
+  seedSource?: SeedSource | null;
+
+  @ApiPropertyOptional({ nullable: true })
+  seededAt?: Date | null;
+
   @ApiProperty({ example: "ACTIVE" })
   status: string;
 

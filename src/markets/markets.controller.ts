@@ -2,9 +2,11 @@ import { Body, Controller, Delete, Get, Param, Patch, Post, Query, UseGuards } f
 import { ApiBearerAuth, ApiCreatedResponse, ApiOkResponse, ApiTags } from "@nestjs/swagger";
 import { Role } from "@prisma/client";
 import { MarketResponseDto } from "../common/dto/api-models.dto";
+import { CurrentUser } from "../common/decorators/current-user.decorator";
 import { Roles } from "../common/decorators/roles.decorator";
 import { JwtAuthGuard } from "../common/guards/jwt-auth.guard";
 import { RolesGuard } from "../common/guards/roles.guard";
+import { AuthUser } from "../common/types/auth-user";
 import { CreateMarketDto } from "./dto/create-market.dto";
 import { UpdateMarketDto } from "./dto/update-market.dto";
 import { MarketsService } from "./markets.service";
@@ -51,6 +53,15 @@ export class MarketsController {
   @ApiOkResponse({ type: MarketResponseDto })
   update(@Param("id") id: string, @Body() dto: UpdateMarketDto) {
     return this.marketsService.update(id, dto);
+  }
+
+  @Post("admin/markets/:id/save-to-seed")
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  @ApiBearerAuth()
+  @ApiOkResponse({ type: MarketResponseDto })
+  saveToSeed(@CurrentUser() admin: AuthUser, @Param("id") id: string) {
+    return this.marketsService.saveToSeed(id, admin.id);
   }
 
   @Delete("admin/markets/:id")

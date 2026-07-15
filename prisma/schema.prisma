@@ -99,17 +99,20 @@ model User {
 }
 
 model Market {
-  id          String   @id @default(cuid())
-  name        String   @unique
+  id          String      @id @default(cuid())
+  name        String      @unique
   description String?
   iconUrl     String?
-  sortOrder   Int      @default(0)
-  isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  sortOrder   Int         @default(0)
+  isActive    Boolean     @default(true)
+  seedSource  SeedSource?
+  seededAt    DateTime?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
   stocks      Stock[]
 
   @@index([isActive, sortOrder])
+  @@index([seedSource])
 }
 
 model Stock {
