@@ -179,60 +179,70 @@ export class ScenariosService {
     const movementSettings = await this.priceMovementsService.getSettings();
     const appliedAt = new Date();
 
-    await this.prisma.$transaction(async (tx) => {
-      for (const stock of targetStocks) {
-        const changeRate = this.calculateChangeRate(
-          scenario.type,
-          scenario.sentiment,
-          scenario.impactLevel,
-          stock,
-        );
-        const oldPrice = this.priceMovementsService.resolveCurrentPrice(stock, appliedAt);
-        const multiplier = new Prisma.Decimal(1).plus(changeRate.div(100));
-        const targetPrice = money(Prisma.Decimal.max(oldPrice.mul(multiplier), 1));
-        const impactReason = `${scenario.type}_${scenario.sentiment}_IMPACT`;
-        const movement = await this.priceMovementsService.scheduleTargetInTx(
-          tx,
-          stock,
-          targetPrice,
-          movementSettings,
-          {
-            reason: `SCENARIO_${scenario.id}:${impactReason}`,
-            durationMultiplier: this.movementDurationMultiplier(scenario.type),
-            now: appliedAt,
-          },
-        );
+    await this.prisma.$transaction(
+      async (tx) => {
+        for (const stock of targetStocks) {
+          const changeRate = this.calculateChangeRate(
+            scenario.type,
+            scenario.sentiment,
+            scenario.impactLevel,
+            stock,
+          );
+          const oldPrice = this.priceMovementsService.resolveCurrentPrice(
+            stock,
+            appliedAt,
+          );
+          const multiplier = new Prisma.Decimal(1).plus(changeRate.div(100));
+          const targetPrice = money(
+            Prisma.Decimal.max(oldPrice.mul(multiplier), 1),
+          );
+          const impactReason = `${scenario.type}_${scenario.sentiment}_IMPACT`;
+          const movement = await this.priceMovementsService.scheduleTargetInTx(
+            tx,
+            stock,
+            targetPrice,
+            movementSettings,
+            {
+              reason: `SCENARIO_${scenario.id}:${impactReason}`,
+              durationMultiplier: this.movementDurationMultiplier(
+                scenario.type,
+              ),
+              now: appliedAt,
+            },
+          );
 
-        await tx.scenarioImpact.create({
-          data: {
-            scenarioId: scenario.id,
+          await tx.scenarioImpact.create({
+            data: {
+              scenarioId: scenario.id,
+              stockId: stock.id,
+              oldPrice,
+              newPrice: targetPrice,
+              changeRate,
+              impactReason,
+            },
+          });
+          conditionalOrderResults.push(...movement.conditionalOrderResults);
+          affectedStocks.push({
             stockId: stock.id,
-            oldPrice,
-            newPrice: targetPrice,
-            changeRate,
+            stockName: stock.name,
+            beforePrice: movement.currentPrice,
+            afterPrice: targetPrice,
+            targetPrice,
+            appliedRate: changeRate,
             impactReason,
-          },
-        });
-        conditionalOrderResults.push(...movement.conditionalOrderResults);
-        affectedStocks.push({
-          stockId: stock.id,
-          stockName: stock.name,
-          beforePrice: movement.currentPrice,
-          afterPrice: targetPrice,
-          targetPrice,
-          appliedRate: changeRate,
-          impactReason,
-          movementStartedAt: movement.movementStartedAt,
-          movementEndsAt: movement.movementEndsAt,
-          movementDurationMinutes: movement.movementDurationMinutes,
-        });
-      }
+            movementStartedAt: movement.movementStartedAt,
+            movementEndsAt: movement.movementEndsAt,
+            movementDurationMinutes: movement.movementDurationMinutes,
+          });
+        }
 
-      await tx.scenario.update({
-        where: { id: scenario.id },
-        data: { appliedAt },
-      });
-    });
+        await tx.scenario.update({
+          where: { id: scenario.id },
+          data: { appliedAt },
+        });
+      },
+      { maxWait: 10_000, timeout: 60_000 },
+    );
 
     const aiTradeSummary = await this.aiAccountsService.runScenarioTrades(
       scenario.id,
