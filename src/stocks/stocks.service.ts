@@ -1,9 +1,10 @@
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
-import { Prisma, Stock } from "@prisma/client";
+import { Prisma, SeedSource, Stock } from "@prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
 import { money, rate } from "../common/utils/decimal";
 import { withLivePrice } from "../price-movements/price-movement.utils";
 import { CreateStockDto } from "./dto/create-stock.dto";
+import { SaveStockToSeedDto } from "./dto/save-stock-to-seed.dto";
 import { UpdateListingStatusDto } from "./dto/update-listing-status.dto";
 import { UpdateStockDto } from "./dto/update-stock.dto";
 
@@ -155,6 +156,48 @@ export class StocksService {
       }
     });
     return (await this.withMarketMetrics([stock]))[0];
+  }
+
+  async saveToSeed(id: string, dto: SaveStockToSeedDto, adminId: string) {
+    const stock = await this.prisma.stock.findUnique({
+      where: { id },
+      include: { market: true }
+    });
+    if (!stock) {
+      throw new NotFoundException("Stock not found.");
+    }
+
+    const seedPrice = dto.seedPrice === undefined ? stock.initialPrice : money(dto.seedPrice);
+    const seededAt = new Date();
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const savedStock = await tx.stock.update({
+        where: { id },
+        data: {
+          seedSource: SeedSource.ADMIN,
+          seedPrice,
+          seededAt
+        },
+        include: { market: true }
+      });
+
+      await tx.adminAuditLog.create({
+        data: {
+          adminId,
+          action: "STOCK_SAVED_TO_SEED",
+          metadata: {
+            stockId: stock.id,
+            stockName: stock.name,
+            marketId: stock.marketId,
+            marketName: stock.market.name,
+            seedPrice: seedPrice.toString()
+          }
+        }
+      });
+
+      return savedStock;
+    });
+
+    return (await this.withMarketMetrics([updated]))[0];
   }
 
   async chartData(id: string, options: { take?: number; interval?: string } = {}) {

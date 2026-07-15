@@ -51,7 +51,37 @@ npm run db:seed
 
 `prisma/seed-data.local.json` is ignored by Git, so local or production seed data can be managed separately without committing it. Each market can contain a `stocks` array. Each stock supports `name`, `description`, `imageUrl`, `tags`, `currentPrice`, `previousPrice`, `totalSupply`, `circulatingSupply`, `volatilityLevel`, `dividendEnabled`, and `baseDividendRate`.
 
-Season reset keeps only the seed catalog. `POST /admin/seasons/:id/reset` clears holdings, orders, watchlists, trades, dividends, rankings, scenarios, impacts, and price history, deletes markets/stocks that are not present in the seed data, reapplies the seed markets/stocks, and resets USER/AI cash to the season initial cash. User, admin, and AI accounts themselves are not deleted.
+Season reset keeps the file seed catalog and stocks saved to the database seed catalog by an admin. `POST /admin/seasons/:id/reset` clears holdings, orders, watchlists, trades, dividends, rankings, scenarios, impacts, and price history, deletes other markets/stocks, reapplies the seed markets/stocks, and resets USER/AI cash to the season initial cash. User, admin, and AI accounts themselves are not deleted.
+
+### Saving A Listed Stock To The Seed Catalog
+
+Admins can promote a stock listed during a season into the persistent seed catalog:
+
+```text
+POST /admin/stocks/:id/save-to-seed
+Authorization: Bearer <admin-access-token>
+Content-Type: application/json
+
+{}
+```
+
+By default, the stock's `initialPrice` becomes the price restored at the next season reset. To choose another reset price, send:
+
+```json
+{
+  "seedPrice": 12500
+}
+```
+
+The stock response includes `seedSource`, `seedPrice`, and `seededAt`. `seedSource=FILE` identifies stocks from the JSON seed file, while `seedSource=ADMIN` identifies stocks promoted through this API. Promoting a stock also preserves its market because a market containing an admin seed stock is not deleted during season reset. Each promotion is recorded as `STOCK_SAVED_TO_SEED` in the admin audit log.
+
+This feature adds database columns, so apply the Prisma schema once in every deployed environment before starting the updated server:
+
+```bash
+npx prisma db push
+```
+
+Frontend integration details are documented in [`docs/frontend-seed-catalog-spec.md`](docs/frontend-seed-catalog-spec.md).
 
 ## Main Domains
 

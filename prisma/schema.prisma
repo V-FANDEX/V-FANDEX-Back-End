@@ -68,6 +68,11 @@ enum AiStrategyType {
   MARKET_FOCUSED
 }
 
+enum SeedSource {
+  FILE
+  ADMIN
+}
+
 model User {
   id                String             @id @default(cuid())
   email             String?            @unique
@@ -131,6 +136,9 @@ model Stock {
   isListed           Boolean            @default(true)
   isTradingSuspended Boolean            @default(false)
   delistedAt         DateTime?
+  seedSource         SeedSource?
+  seedPrice          Decimal?           @db.Decimal(20, 4)
+  seededAt           DateTime?
   createdAt          DateTime           @default(now())
   updatedAt          DateTime           @updatedAt
   conditionalOrders  ConditionalOrder[]
@@ -146,6 +154,7 @@ model Stock {
   @@index([marketId, isListed])
   @@index([currentPrice])
   @@index([targetPrice])
+  @@index([seedSource])
 }
 
 model Holding {

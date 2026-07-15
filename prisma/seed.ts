@@ -1,6 +1,12 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { Prisma, PrismaClient, Role, SeasonStatus } from "@prisma/client";
+import {
+  Prisma,
+  PrismaClient,
+  Role,
+  SeasonStatus,
+  SeedSource,
+} from "@prisma/client";
 import * as bcrypt from "bcryptjs";
 
 const prisma = new PrismaClient();
@@ -165,6 +171,9 @@ async function seedStock(marketId: string, stockSeed: SeedStock) {
       dividendEnabled: stockSeed.dividendEnabled ?? false,
       baseDividendRate: new Prisma.Decimal(stockSeed.baseDividendRate ?? 0),
       isListed: stockSeed.isListed ?? true,
+      seedSource: SeedSource.FILE,
+      seedPrice: initialPrice,
+      seededAt: null,
     },
     create: {
       marketId,
@@ -181,6 +190,8 @@ async function seedStock(marketId: string, stockSeed: SeedStock) {
       dividendEnabled: stockSeed.dividendEnabled ?? false,
       baseDividendRate: new Prisma.Decimal(stockSeed.baseDividendRate ?? 0),
       isListed: stockSeed.isListed ?? true,
+      seedSource: SeedSource.FILE,
+      seedPrice: initialPrice,
     },
   });
 

@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
-import { Prisma, Role, SeasonStatus } from "@prisma/client";
+import { Prisma, Role, SeasonStatus, SeedSource } from "@prisma/client";
 import { money } from "../common/utils/decimal";
 import { PrismaService } from "../prisma/prisma.service";
 import { RankingsService } from "../rankings/rankings.service";
@@ -177,25 +177,34 @@ export class SeasonsService {
 
   private async resetCatalogFromSeedInTx(tx: Tx, seedData: SeedData) {
     const seedMarketNames = seedData.markets.map((market) => market.name);
-    const stockDeleteFilters: Prisma.StockWhereInput[] = [
-      { market: { name: { notIn: seedMarketNames } } },
-      ...seedData.markets.map((market) => ({
+    const fileSeedStockFilters: Prisma.StockWhereInput[] = seedData.markets.flatMap((market) =>
+      (market.stocks ?? []).map((stock) => ({
         market: { name: market.name },
-        name: { notIn: (market.stocks ?? []).map((stock) => stock.name) }
+        name: stock.name
       }))
-    ];
+    );
+    const stockDeleteWhere: Prisma.StockWhereInput = {
+      OR: [{ seedSource: null }, { seedSource: SeedSource.FILE }]
+    };
+    if (fileSeedStockFilters.length > 0) {
+      stockDeleteWhere.NOT = { OR: fileSeedStockFilters };
+    }
 
     const nonSeedStocks = await tx.stock.deleteMany({
-      where: { OR: stockDeleteFilters }
+      where: stockDeleteWhere
     });
     const nonSeedMarkets = await tx.market.deleteMany({
-      where: { name: { notIn: seedMarketNames } }
+      where: {
+        name: { notIn: seedMarketNames },
+        stocks: { none: { seedSource: SeedSource.ADMIN } }
+      }
     });
 
     let seedMarketsApplied = 0;
     let seedStocksApplied = 0;
+    let adminSeedStocksRestored = 0;
     let seedPriceHistoriesCreated = 0;
-    const seedMarketIds: string[] = [];
+    const seedMarketIds = new Set<string>();
 
     for (const [index, marketSeed] of seedData.markets.entries()) {
       const market = await tx.market.upsert({
@@ -215,7 +224,7 @@ export class SeasonsService {
         }
       });
       seedMarketsApplied += 1;
-      seedMarketIds.push(market.id);
+      seedMarketIds.add(market.id);
 
       for (const stockSeed of marketSeed.stocks ?? []) {
         const stock = await this.upsertSeedStockInTx(tx, market.id, stockSeed);
@@ -231,13 +240,57 @@ export class SeasonsService {
       }
     }
 
-    await this.clearDeletedMarketPreferencesInTx(tx, seedMarketIds);
+    const adminSeedStocks = await tx.stock.findMany({
+      where: { seedSource: SeedSource.ADMIN },
+      orderBy: { createdAt: "asc" }
+    });
+    const adminSeedMarketIds = new Set(adminSeedStocks.map((stock) => stock.marketId));
+    const adminOnlySeedMarketIds = new Set(
+      [...adminSeedMarketIds].filter((marketId) => !seedMarketIds.has(marketId))
+    );
+
+    for (const marketId of adminSeedMarketIds) {
+      await tx.market.update({
+        where: { id: marketId },
+        data: { isActive: true }
+      });
+      seedMarketIds.add(marketId);
+    }
+
+    for (const stock of adminSeedStocks) {
+      const seedPrice = stock.seedPrice ?? stock.initialPrice;
+      await tx.stock.update({
+        where: { id: stock.id },
+        data: {
+          currentPrice: seedPrice,
+          previousPrice: seedPrice,
+          initialPrice: seedPrice,
+          targetPrice: null,
+          movementStartPrice: null,
+          movementStartedAt: null,
+          movementEndsAt: null,
+          movementReason: null,
+          lastPriceHistoryAt: null,
+          isListed: true,
+          isTradingSuspended: false,
+          delistedAt: null
+        }
+      });
+      const history = this.buildDemoPriceHistory(stock.id, stock.name, seedPrice, seedPrice);
+      await tx.priceHistory.createMany({ data: history });
+      adminSeedStocksRestored += 1;
+      seedPriceHistoriesCreated += history.length;
+    }
+
+    await this.clearDeletedMarketPreferencesInTx(tx, [...seedMarketIds]);
 
     return {
       nonSeedStocksDeleted: nonSeedStocks.count,
       nonSeedMarketsDeleted: nonSeedMarkets.count,
       seedMarketsApplied,
       seedStocksApplied,
+      adminSeedMarketsPreserved: adminOnlySeedMarketIds.size,
+      adminSeedStocksRestored,
       seedPriceHistoriesCreated
     };
   }
@@ -275,7 +328,10 @@ export class SeasonsService {
         baseDividendRate: new Prisma.Decimal(stockSeed.baseDividendRate ?? 0),
         isListed: stockSeed.isListed ?? true,
         isTradingSuspended: false,
-        delistedAt: null
+        delistedAt: null,
+        seedSource: SeedSource.FILE,
+        seedPrice: initialPrice,
+        seededAt: null
       },
       create: {
         marketId,
@@ -291,7 +347,9 @@ export class SeasonsService {
         volatilityLevel: stockSeed.volatilityLevel ?? 5,
         dividendEnabled: stockSeed.dividendEnabled ?? false,
         baseDividendRate: new Prisma.Decimal(stockSeed.baseDividendRate ?? 0),
-        isListed: stockSeed.isListed ?? true
+        isListed: stockSeed.isListed ?? true,
+        seedSource: SeedSource.FILE,
+        seedPrice: initialPrice
       }
     });
   }

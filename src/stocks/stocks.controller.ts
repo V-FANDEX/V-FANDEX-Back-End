@@ -14,10 +14,13 @@ import {
   StockQuoteResponseDto,
   StockResponseDto
 } from "../common/dto/api-models.dto";
+import { CurrentUser } from "../common/decorators/current-user.decorator";
 import { Roles } from "../common/decorators/roles.decorator";
 import { JwtAuthGuard } from "../common/guards/jwt-auth.guard";
 import { RolesGuard } from "../common/guards/roles.guard";
+import { AuthUser } from "../common/types/auth-user";
 import { CreateStockDto } from "./dto/create-stock.dto";
+import { SaveStockToSeedDto } from "./dto/save-stock-to-seed.dto";
 import { UpdateListingStatusDto } from "./dto/update-listing-status.dto";
 import { UpdateStockDto } from "./dto/update-stock.dto";
 import { StocksService } from "./stocks.service";
@@ -115,5 +118,18 @@ export class StocksController {
   @ApiOkResponse({ type: StockResponseDto })
   updateListingStatus(@Param("id") id: string, @Body() dto: UpdateListingStatusDto) {
     return this.stocksService.updateListingStatus(id, dto);
+  }
+
+  @Post("admin/stocks/:id/save-to-seed")
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  @ApiBearerAuth()
+  @ApiOkResponse({ type: StockResponseDto })
+  saveToSeed(
+    @CurrentUser() admin: AuthUser,
+    @Param("id") id: string,
+    @Body() dto: SaveStockToSeedDto
+  ) {
+    return this.stocksService.saveToSeed(id, dto, admin.id);
   }
 }

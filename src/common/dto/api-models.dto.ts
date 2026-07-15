@@ -8,6 +8,7 @@ import {
   ScenarioCreatedBy,
   ScenarioSentiment,
   ScenarioType,
+  SeedSource,
   SeasonStatus,
   TradeType,
 } from "@prisma/client";
@@ -159,6 +160,15 @@ export class StockResponseDto {
 
   @ApiPropertyOptional({ nullable: true })
   delistedAt?: Date | null;
+
+  @ApiPropertyOptional({ enum: SeedSource, nullable: true })
+  seedSource?: SeedSource | null;
+
+  @ApiPropertyOptional({ nullable: true, example: "10000.0000" })
+  seedPrice?: string | null;
+
+  @ApiPropertyOptional({ nullable: true })
+  seededAt?: Date | null;
 
   @ApiProperty()
   volume: number;
@@ -644,6 +654,12 @@ export class SeasonResetResponseDto {
 
   @ApiProperty()
   seedStocksApplied: number;
+
+  @ApiProperty()
+  adminSeedMarketsPreserved: number;
+
+  @ApiProperty()
+  adminSeedStocksRestored: number;
 
   @ApiProperty()
   seedPriceHistoriesCreated: number;
